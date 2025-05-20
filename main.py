@@ -27,11 +27,12 @@ def create_tfidf_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english')
     return tfidf.fit_transform(df['combined'])
 
-@st.cache_resource
+# Jangan cache fungsi ini karena parameternya unhashable
 def create_knn_model(tfidf_matrix):
     knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
     knn_model.fit(tfidf_matrix)
     return knn_model
+
 
 def get_recommendations(title, df, cosine_sim, knn_model, tfidf_matrix, n=10):
     if title not in df['title'].values:
