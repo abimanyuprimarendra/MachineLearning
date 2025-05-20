@@ -8,24 +8,43 @@ from scipy.sparse import hstack, csr_matrix
 import matplotlib.pyplot as plt
 
 def load_data_from_drive():
-    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'
+    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti sesuai file ID
     url = f'https://drive.google.com/uc?id={file_id}&export=download'
-    try:
-        df = pd.read_excel(url)
-    except Exception as e:
-        st.error(f"Gagal membaca file: {e}")
-        return pd.DataFrame()
-
-    st.write("Preview data (5 baris pertama):")
-    st.dataframe(df.head())
-
-    st.write("Kolom-kolom dataset:")
-    st.write(df.columns.tolist())
-
-    st.write("Jumlah baris dataset:", len(df))
     
-    return df
+    df = pd.read_excel(url)
 
+    # Pastikan kolom yang diperlukan ada dan isi NaN diisi default
+    df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
+    df['director'] = df.get('director', pd.Series()).fillna('Unknown')
+    df['country'] = df.get('country', pd.Series()).fillna('Unknown')
+    
+    # Kolom release_year diubah jadi numerik dengan median sebagai pengisi NaN
+    if 'release_year' in df.columns:
+        release_year_num = pd.to_numeric(df['release_year'], errors='coerce')
+        median_year = release_year_num.dropna().median()
+        if pd.isna(median_year):
+            median_year = 2000
+        df['release_year'] = release_year_num.fillna(median_year)
+    else:
+        df['release_year'] = 2000  # default
+    
+    # Isi NaN di kolom duration_min jika ada
+    if 'duration_min' in df.columns:
+        df['duration_min'] = pd.to_numeric(df['duration_min'], errors='coerce').fillna(df['duration_min'].median())
+    else:
+        df['duration_min'] = 90  # default durasi
+
+    # Bersihkan title dari karakter aneh, pastikan title str
+    df['title'] = df['title'].astype(str).str.strip()
+
+    # Bersihkan type, pastikan string tanpa spasi dan kapitalisasi konsisten
+    df['type'] = df['type'].astype(str).str.strip().str.capitalize()
+
+    # Buat genres list dari listed_in jika belum ada genres kolom
+    if 'genres' not in df.columns:
+        df['genres'] = df['listed_in'].apply(lambda x: [g.strip() for g in x.split(',')] if x else [])
+
+    return df
 
 def preprocess_features(df):
     # Gabungkan kolom teks yang relevan jadi 1 kolom string untuk tfidf
@@ -61,7 +80,7 @@ def get_recommendations(title, tipe, n=5):
     if not isinstance(title, str) or title.strip() == '':
         return None
 
-    df = df_full[df_full['type'].str.lower() == tipe.lower()]
+    df = df_full[df_full['type'].astype(str).str.strip().str.lower() == tipe.lower()]
     df = df[df['title'].notna()]
     df = df[df['title'].apply(lambda x: isinstance(x, str))]
 
@@ -103,8 +122,8 @@ knn, X = build_model(df_full)
 # Pilihan tipe film
 tipe_pilihan = st.selectbox("Pilih Tipe:", ['Movie', 'TV Show'])
 
-# Filter data berdasarkan tipe, case-insensitive
-df_filtered = df_full[df_full['type'].str.lower() == tipe_pilihan.lower()]
+# Filter data berdasarkan tipe, case-insensitive dan bersihkan spasi
+df_filtered = df_full[df_full['type'].astype(str).str.strip().str.lower() == tipe_pilihan.lower()]
 st.write(f"Jumlah film untuk tipe '{tipe_pilihan}': {len(df_filtered)}")
 
 film_list = sorted(df_filtered['title'].dropna().unique())
