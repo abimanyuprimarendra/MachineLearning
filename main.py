@@ -7,13 +7,13 @@ from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse import hstack, csr_matrix
 import matplotlib.pyplot as plt
 
-# === Caching untuk data & model ===
 @st.cache_data
 def load_data_from_drive():
-    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti sesuai file ID
-    url = f'https://drive.google.com/uc?id={file_id}&export=download'
+    # Menggunakan Google Sheets dalam format CSV
+    file_id = '1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB'
+    url = f'https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv'
 
-    df = pd.read_excel(url)
+    df = pd.read_csv(url)
 
     # Pastikan kolom tersedia dan bersih
     df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
