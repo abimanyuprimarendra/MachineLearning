@@ -6,7 +6,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
 st.set_page_config(page_title="Netflix Movie Recommender", layout="wide")
 
@@ -76,56 +75,47 @@ tfidf_matrix = create_tfidf_matrix(df)
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 knn_model = create_knn_model(tfidf_matrix)
 
-# Pilih satu judul film dari dropdown
-selected_title = st.selectbox(
-    "Pilih judul film untuk mendapatkan rekomendasi:",
-    options=df['title'].sort_values().unique(),
-    index=0
+st.markdown("### Pilih judul film untuk Cosine Similarity:")
+selected_title_cosine = st.selectbox(
+    "Judul film (Cosine Similarity)",
+    options=df['title'].sort_values().unique()
 )
 
-if selected_title:
-    # Cari indeks film pilihan
-    idx = df[df['title'] == selected_title].index[0]
+st.markdown("### Pilih judul film untuk KNN:")
+selected_title_knn = st.selectbox(
+    "Judul film (KNN)",
+    options=df['title'].sort_values().unique()
+)
 
-    # Untuk KNN, kita pilih film lain secara acak agar beda dengan yang dipilih cosine similarity
-    titles_except_selected = df['title'].drop(idx)
-    knn_selected_title = np.random.choice(titles_except_selected)
-
-    # Hitung rekomendasi dan waktu eksekusi
-    cosine_recs, cosine_time = get_cosine_recommendations(selected_title, df, cosine_sim)
-    knn_recs, knn_time = get_knn_recommendations(knn_selected_title, df, knn_model, tfidf_matrix)
-
-    st.markdown(f"### Rekomendasi film mirip dengan **{selected_title}** (Cosine Similarity)")
+if selected_title_cosine:
+    cosine_recs, cosine_time = get_cosine_recommendations(selected_title_cosine, df, cosine_sim)
+    st.markdown(f"#### Rekomendasi berdasarkan Cosine Similarity untuk film **{selected_title_cosine}**")
     st.write(f"Waktu eksekusi: {cosine_time:.4f} detik")
-    col1 = st.container()
-    with col1:
-        for title, score in cosine_recs:
-            st.write(f"- {title} (score: {score:.4f})")
-        plot_similarity_scores(cosine_recs, "Cosine Similarity")
+    for title, score in cosine_recs:
+        st.write(f"- {title} (score: {score:.4f})")
 
-    st.markdown(f"### Rekomendasi film mirip dengan **{knn_selected_title}** (KNN)")
+if selected_title_knn:
+    knn_recs, knn_time = get_knn_recommendations(selected_title_knn, df, knn_model, tfidf_matrix)
+    st.markdown(f"#### Rekomendasi berdasarkan KNN untuk film **{selected_title_knn}**")
     st.write(f"Waktu eksekusi: {knn_time:.4f} detik")
-    col2 = st.container()
-    with col2:
-        for title, score in knn_recs:
-            st.write(f"- {title} (score: {score:.4f})")
-        plot_similarity_scores(knn_recs, "KNN")
+    for title, score in knn_recs:
+        st.write(f"- {title} (score: {score:.4f})")
 
-    # Visualisasi tambahan: distribusi genre film dataset
-    st.markdown("---")
-    st.subheader("Distribusi Genre Film di Dataset")
-    genre_counts = df['listed_in'].str.split(',').explode().str.strip().value_counts()
-    fig, ax = plt.subplots(figsize=(12,5))
-    sns.barplot(x=genre_counts.values[:15], y=genre_counts.index[:15], palette="magma", ax=ax)
-    ax.set_xlabel("Jumlah Film")
-    ax.set_ylabel("Genre")
-    st.pyplot(fig)
+# Visualisasi tambahan: distribusi genre film dataset
+st.markdown("---")
+st.subheader("Distribusi Genre Film di Dataset")
+genre_counts = df['listed_in'].str.split(',').explode().str.strip().value_counts()
+fig, ax = plt.subplots(figsize=(12,5))
+sns.barplot(x=genre_counts.values[:15], y=genre_counts.index[:15], palette="magma", ax=ax)
+ax.set_xlabel("Jumlah Film")
+ax.set_ylabel("Genre")
+st.pyplot(fig)
 
-    if 'release_year' in df.columns:
-        st.subheader("Jumlah Film per Tahun Rilis")
-        year_counts = df['release_year'].value_counts().sort_index()
-        fig2, ax2 = plt.subplots(figsize=(12,4))
-        sns.lineplot(x=year_counts.index, y=year_counts.values, marker='o', ax=ax2)
-        ax2.set_xlabel("Tahun Rilis")
-        ax2.set_ylabel("Jumlah Film")
-        st.pyplot(fig2)
+if 'release_year' in df.columns:
+    st.subheader("Jumlah Film per Tahun Rilis")
+    year_counts = df['release_year'].value_counts().sort_index()
+    fig2, ax2 = plt.subplots(figsize=(12,4))
+    sns.lineplot(x=year_counts.index, y=year_counts.values, marker='o', ax=ax2)
+    ax2.set_xlabel("Tahun Rilis")
+    ax2.set_ylabel("Jumlah Film")
+    st.pyplot(fig2)
