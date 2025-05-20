@@ -6,60 +6,54 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse import hstack, csr_matrix
 import matplotlib.pyplot as plt
- st.write("Dataframe preview:", df_full.head())
 
+# === Caching untuk data & model ===
+@st.cache_data
 def load_data_from_drive():
     file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti sesuai file ID
     url = f'https://drive.google.com/uc?id={file_id}&export=download'
-    
+
     df = pd.read_excel(url)
 
-    # Pastikan kolom yang diperlukan ada dan isi NaN diisi default
+    # Pastikan kolom tersedia dan bersih
     df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
     df['director'] = df.get('director', pd.Series()).fillna('Unknown')
     df['country'] = df.get('country', pd.Series()).fillna('Unknown')
     
-    # Kolom release_year diubah jadi numerik dengan median sebagai pengisi NaN
     if 'release_year' in df.columns:
         release_year_num = pd.to_numeric(df['release_year'], errors='coerce')
         median_year = release_year_num.dropna().median()
-        if pd.isna(median_year):
-            median_year = 2000
-        df['release_year'] = release_year_num.fillna(median_year)
+        df['release_year'] = release_year_num.fillna(median_year if not np.isnan(median_year) else 2000)
     else:
-        df['release_year'] = 2000  # default
-    
-    # Isi NaN di kolom duration_min jika ada
+        df['release_year'] = 2000
+
     if 'duration_min' in df.columns:
-        df['duration_min'] = pd.to_numeric(df['duration_min'], errors='coerce').fillna(df['duration_min'].median())
+        df['duration_min'] = pd.to_numeric(df['duration_min'], errors='coerce').fillna(90)
     else:
-        df['duration_min'] = 90  # default durasi
+        df['duration_min'] = 90
 
-    # Bersihkan title dari karakter aneh, pastikan title str
     df['title'] = df['title'].astype(str).str.strip()
-
-    # Bersihkan type, pastikan string tanpa spasi dan kapitalisasi konsisten
     df['type'] = df['type'].astype(str).str.strip().str.capitalize()
 
-    # Buat genres list dari listed_in jika belum ada genres kolom
     if 'genres' not in df.columns:
         df['genres'] = df['listed_in'].apply(lambda x: [g.strip() for g in x.split(',')] if x else [])
 
     return df
 
 def preprocess_features(df):
-    # Gabungkan kolom teks yang relevan jadi 1 kolom string untuk tfidf
-    cols_to_combine = ['director', 'country', 'listed_in', 'genres']
-    for col in cols_to_combine:
-        if col not in df.columns:
-            df[col] = ''
-    # Untuk genres, kalau list gabungkan jadi string
+    df = df.copy()
     def join_genres(row):
         if isinstance(row['genres'], list):
             return ' '.join(row['genres'])
         return str(row['genres'])
+    
     df['genres_str'] = df.apply(join_genres, axis=1)
-    df['combined_features'] = df['director'].astype(str) + ' ' + df['country'].astype(str) + ' ' + df['listed_in'].astype(str) + ' ' + df['genres_str']
+    df['combined_features'] = (
+        df['director'].astype(str) + ' ' +
+        df['country'].astype(str) + ' ' +
+        df['listed_in'].astype(str) + ' ' +
+        df['genres_str']
+    )
     return df
 
 @st.cache_resource
@@ -77,14 +71,10 @@ def build_model(data):
     knn.fit(X)
     return knn, X
 
-def get_recommendations(title, tipe, n=5):
-    if not isinstance(title, str) or title.strip() == '':
-        return None
-
-    df = df_full[df_full['type'].astype(str).str.strip().str.lower() == tipe.lower()]
+def get_recommendations(title, tipe, df_full, knn, X, n=5):
+    df = df_full[df_full['type'].str.lower() == tipe.lower()]
     df = df[df['title'].notna()]
-    df = df[df['title'].apply(lambda x: isinstance(x, str))]
-
+    
     matches = df[df['title'].str.lower() == title.lower()]
     if matches.empty:
         return None
@@ -102,53 +92,48 @@ def get_recommendations(title, tipe, n=5):
             'Release Year': int(movie['release_year']),
             'Type': movie['type'],
             'Director': movie['director'],
-            'Genres': movie['genres'] if isinstance(movie['genres'], str) else ', '.join(movie['genres']),
+            'Genres': ', '.join(movie['genres']) if isinstance(movie['genres'], list) else movie['genres'],
             'Similarity': similarity
         })
     return pd.DataFrame(recs)
 
-# === MAIN ===
+# === MAIN APP ===
 st.title("🎬 Rekomendasi Film Netflix")
 
 df_full = load_data_from_drive()
-
-# Debug tampilkan unique types dan jumlah data
-st.write("Unique types di data:", df_full['type'].unique())
-st.write("Jumlah data total:", len(df_full))
+st.write("🔎 Jumlah total data:", len(df_full))
+st.write("📌 Tipe yang tersedia:", df_full['type'].unique())
 
 df_full = preprocess_features(df_full)
-
 knn, X = build_model(df_full)
 
-# Pilihan tipe film
-tipe_pilihan = st.selectbox("Pilih Tipe:", ['Movie', 'TV Show'])
+tipe_pilihan = st.selectbox("Pilih Tipe:", sorted(df_full['type'].unique()))
 
-# Filter data berdasarkan tipe, case-insensitive dan bersihkan spasi
-df_filtered = df_full[df_full['type'].astype(str).str.strip().str.lower() == tipe_pilihan.lower()]
-st.write(f"Jumlah film untuk tipe '{tipe_pilihan}': {len(df_filtered)}")
+df_filtered = df_full[df_full['type'].str.lower() == tipe_pilihan.lower()]
+st.write(f"📺 Jumlah judul dengan tipe '{tipe_pilihan}': {len(df_filtered)}")
 
 film_list = sorted(df_filtered['title'].dropna().unique())
 
 if len(film_list) == 0:
-    st.warning(f"Tidak ada film dengan tipe '{tipe_pilihan}'.")
+    st.warning(f"Tidak ada judul untuk tipe '{tipe_pilihan}'.")
     film_selected = None
 else:
     film_selected = st.selectbox("Pilih Judul Film:", film_list)
 
 if film_selected:
     if st.button("Tampilkan Rekomendasi"):
-        hasil = get_recommendations(film_selected, tipe_pilihan, n=5)
+        hasil = get_recommendations(film_selected, tipe_pilihan, df_full, knn, X, n=5)
         if hasil is None or hasil.empty:
             st.warning("Film tidak ditemukan atau tidak ada rekomendasi.")
         else:
             st.subheader(f"Hasil Rekomendasi untuk '{film_selected}'")
             st.dataframe(hasil)
 
-            # Visualisasi Similarity
+            # Bar Chart Similarity
             st.subheader("🔍 Skor Kemiripan")
             st.bar_chart(hasil.set_index('Title')['Similarity'])
 
-            # Visualisasi Genre
+            # Genre Distribution
             st.subheader("🎭 Distribusi Genre")
             all_genres = hasil['Genres'].str.split(', ').explode()
             genre_count = all_genres.value_counts().head(10)
@@ -158,7 +143,7 @@ if film_selected:
             ax1.set_ylabel("Genre")
             st.pyplot(fig1)
 
-            # Pie chart tipe (biasanya 1 tipe)
+            # Pie Chart Tipe
             st.subheader("📊 Tipe Film")
             tipe_count = hasil['Type'].value_counts()
             fig2, ax2 = plt.subplots()
@@ -166,4 +151,4 @@ if film_selected:
             ax2.axis('equal')
             st.pyplot(fig2)
 
-            st.success("Rekomendasi selesai ditampilkan ✅")
+            st.success("✅ Rekomendasi selesai ditampilkan.")
