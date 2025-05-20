@@ -23,8 +23,9 @@ def create_tfidf_matrix(df):
     tfidf_matrix = tfidf.fit_transform(df['combined'])
     return tfidf_matrix
 
+# KNN model dibuat tanpa parameter input (akses tfidf_matrix secara global)
 @st.cache_resource
-def create_knn_model(tfidf_matrix):
+def create_knn_model():
     knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
     knn_model.fit(tfidf_matrix)
     return knn_model
@@ -65,10 +66,14 @@ st.title("Sistem Rekomendasi Film Netflix")
 # Load data dari Google Drive
 df = load_data_from_drive()
 
-# Buat matrix TF-IDF dan model KNN
+# Buat matrix TF-IDF
 tfidf_matrix = create_tfidf_matrix(df)
+
+# Buat cosine similarity matrix
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-knn_model = create_knn_model(tfidf_matrix)
+
+# Buat model KNN tanpa parameter
+knn_model = create_knn_model()
 
 title = st.text_input("Masukkan judul film untuk direkomendasikan:")
 
