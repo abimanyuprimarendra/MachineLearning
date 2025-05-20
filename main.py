@@ -89,33 +89,31 @@ def recommend(df, knn, X, movie_title, n_recommendations=5, filter_type=None):
         })
     return recs
 
-# --- Streamlit UI ---
+# Bersihkan kolom type
+df['type'] = df['type'].str.strip().str.lower()
 
-st.title("🎬 Sistem Rekomendasi Film Netflix")
+type_options = ['movie', 'tv show']
+filter_type = st.selectbox("Pilih Tipe Film", [t.title() for t in type_options])
+filter_type_lower = filter_type.lower()
 
-# Load data
-df = load_data_from_drive()
-df, X = prepare_data(df)
-knn = build_model(X)
+filtered_titles = sorted(df[df['type'] == filter_type_lower]['title'].unique())
 
-# Pilih tipe film
-type_options = ['Movie', 'TV Show']
-filter_type = st.selectbox("Pilih Tipe Film", type_options)
+st.write(f"Jumlah film ditemukan: {len(filtered_titles)}")  # untuk debugging
 
-# Filter film berdasarkan tipe
-filtered_titles = sorted(df[df['type'].str.lower() == filter_type.lower()]['title'].unique())
-selected_title = st.selectbox("Pilih Film", filtered_titles)
+if len(filtered_titles) == 0:
+    st.warning("Tidak ada film ditemukan untuk tipe ini.")
+else:
+    selected_title = st.selectbox("Pilih Film", filtered_titles)
 
-# Tombol rekomendasi
-if st.button("Rekomendasikan Film Mirip"):
-    results = recommend(df, knn, X, selected_title, filter_type=filter_type)
-    if isinstance(results, str):
-        st.warning(results)
-    else:
-        st.write(f"Rekomendasi film mirip dengan **{selected_title}** (Tipe: {filter_type}):")
-        for i, rec in enumerate(results, 1):
-            st.markdown(f"**{i}. {rec['Title']}** ({rec['Year']}) - {rec['Type']}")
-            st.markdown(f"- Director: {rec['Director']}")
-            st.markdown(f"- Genres: {rec['Genres']}")
-            st.markdown(f"- Similarity Score: {rec['Similarity']:.4f}")
-            st.markdown("---")
+    if st.button("Rekomendasikan Film Mirip"):
+        results = recommend(df, knn, X, selected_title, filter_type=filter_type)
+        if isinstance(results, str):
+            st.warning(results)
+        else:
+            st.write(f"Rekomendasi film mirip dengan **{selected_title}** (Tipe: {filter_type}):")
+            for i, rec in enumerate(results, 1):
+                st.markdown(f"**{i}. {rec['Title']}** ({rec['Year']}) - {rec['Type']}")
+                st.markdown(f"- Director: {rec['Director']}")
+                st.markdown(f"- Genres: {rec['Genres']}")
+                st.markdown(f"- Similarity Score: {rec['Similarity']:.4f}")
+                st.markdown("---")
