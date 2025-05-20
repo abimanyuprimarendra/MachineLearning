@@ -6,6 +6,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse import hstack, csr_matrix
 import matplotlib.pyplot as plt
+ st.write("Dataframe preview:", df_full.head())
 
 def load_data_from_drive():
     file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti sesuai file ID
