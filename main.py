@@ -14,9 +14,13 @@ def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
-    data['description'] = data.get('description', '').fillna('')
+    if 'description' not in data.columns:
+        data['description'] = ''
+    else:
+        data['description'] = data['description'].fillna('')
     data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
     return data
+
 
 @st.cache_data(show_spinner=False)
 def create_tfidf_matrix(df):
