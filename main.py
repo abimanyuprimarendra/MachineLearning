@@ -8,34 +8,22 @@ from scipy.sparse import hstack, csr_matrix
 import matplotlib.pyplot as plt
 
 @st.cache_data
-def load_data_from_drive():
-    csv_url = 'https://docs.google.com/spreadsheets/d/1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB/export?format=csv'
+def load_movie_data():
+    csv_url = 'https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB'
     df = pd.read_csv(csv_url)
-
-    # Pastikan kolom tersedia dan bersih
-    df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
-    df['director'] = df.get('director', pd.Series()).fillna('Unknown')
-    df['country'] = df.get('country', pd.Series()).fillna('Unknown')
-    
-    if 'release_year' in df.columns:
-        release_year_num = pd.to_numeric(df['release_year'], errors='coerce')
-        median_year = release_year_num.dropna().median()
-        df['release_year'] = release_year_num.fillna(median_year if not np.isnan(median_year) else 2000)
-    else:
-        df['release_year'] = 2000
-
-    if 'duration_min' in df.columns:
-        df['duration_min'] = pd.to_numeric(df['duration_min'], errors='coerce').fillna(90)
-    else:
-        df['duration_min'] = 90
-
-    df['title'] = df['title'].astype(str).str.strip()
-    df['type'] = df['type'].astype(str).str.strip().str.capitalize()
-
-    if 'genres' not in df.columns:
-        df['genres'] = df['listed_in'].apply(lambda x: [g.strip() for g in x.split(',')] if x else [])
-
     return df
+
+movie_data = load_movie_data()
+
+# Tampilkan kolom dan contoh data
+st.write("Kolom:", movie_data.columns.tolist())
+st.write("Contoh data:", movie_data.head())
+
+if 'title' in movie_data.columns:
+    selected_movie = st.selectbox("Pilih Judul Film", movie_data['title'].dropna().unique().tolist())
+else:
+    st.error("Kolom 'title' tidak ditemukan dalam dataset.")
+
 
 
 def preprocess_features(df):
