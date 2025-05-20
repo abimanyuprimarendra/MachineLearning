@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import time
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
@@ -14,13 +13,10 @@ def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
-
     if 'description' in data.columns:
         data['description'] = data['description'].fillna('')
     else:
-        # Kalau kolom description tidak ada, buat kolom baru dengan nilai string kosong
         data['description'] = ''
-
     data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
     return data
 
@@ -29,7 +25,6 @@ def create_tfidf_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english')
     return tfidf.fit_transform(df['combined'])
 
-@st.cache_resource
 def create_knn_model(tfidf_matrix):
     knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
     knn_model.fit(tfidf_matrix)
@@ -70,7 +65,6 @@ tfidf_matrix = create_tfidf_matrix(df)
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 knn_model = create_knn_model(tfidf_matrix)
 
-# Pilihan film dengan selectbox, disusun alfabetis
 selected_title = st.selectbox(
     "Pilih judul film untuk mendapatkan rekomendasi:",
     options=df['title'].sort_values().unique(),
@@ -97,7 +91,6 @@ if selected_title:
             st.write(f"- {title} (score: {score:.4f})")
         plot_similarity_scores(knn_recs, "KNN")
 
-    # Visualisasi tambahan: distribusi genre film dataset
     st.markdown("---")
     st.subheader("Distribusi Genre Film di Dataset")
     genre_counts = df['listed_in'].str.split(',').explode().str.strip().value_counts()
@@ -107,7 +100,6 @@ if selected_title:
     ax.set_ylabel("Genre")
     st.pyplot(fig)
 
-    # Visualisasi tambahan: jumlah film per tahun jika ada kolom 'release_year'
     if 'release_year' in df.columns:
         st.subheader("Jumlah Film per Tahun Rilis")
         year_counts = df['release_year'].value_counts().sort_index()
