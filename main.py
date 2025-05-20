@@ -63,7 +63,14 @@ def build_model(data):
     return knn, X
 
 def get_recommendations(title, tipe, n=5):
+    if not isinstance(title, str) or title.strip() == '':
+        return None
+
     df = df_full[df_full['type'].str.lower() == tipe.lower()]
+    # Pastikan kolom 'title' tidak ada NaN dan bertipe string
+    df = df[df['title'].notna()]
+    df = df[df['title'].apply(lambda x: isinstance(x, str))]
+
     matches = df[df['title'].str.lower() == title.lower()]
     if matches.empty:
         return None
@@ -85,6 +92,7 @@ def get_recommendations(title, tipe, n=5):
             'Similarity': similarity
         })
     return pd.DataFrame(recs)
+
 
 # === MAIN ===
 df_full = load_data_from_drive()
