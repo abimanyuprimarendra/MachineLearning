@@ -5,22 +5,17 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
-# Masukkan file ID Google Drive kamu di sini
-file_id = '1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB'
-
-# URL direct download Google Drive
-url = f'https://drive.google.com/uc?export=download&id={file_id}'
-
-@st.cache_data(show_spinner=False)
-def load_data_from_drive(url):
-    df = pd.read_csv(url)
-    df['listed_in'] = df['listed_in'].fillna('')
-    if 'description' in df.columns:
-        df['description'] = df['description'].fillna('')
+@st.cache_data
+def load_data_from_drive():
+    csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
+    data = pd.read_csv(csv_url)
+    data['listed_in'] = data['listed_in'].fillna('')
+    if 'description' in data.columns:
+        data['description'] = data['description'].fillna('')
     else:
-        df['description'] = ''
-    df['combined'] = df['title'] + " " + df['listed_in'] + " " + df['description']
-    return df
+        data['description'] = ''
+    data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
+    return data
 
 @st.cache_data(show_spinner=False)
 def create_tfidf_matrix(df):
@@ -68,7 +63,7 @@ def measure_avg_time(func, title, runs=10):
 st.title("Sistem Rekomendasi Film Netflix")
 
 # Load data dari Google Drive
-df = load_data_from_drive(url)
+df = load_data_from_drive()
 
 # Buat matrix TF-IDF dan model KNN
 tfidf_matrix = create_tfidf_matrix(df)
