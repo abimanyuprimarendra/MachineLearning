@@ -6,15 +6,8 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse import hstack, csr_matrix
-import re
 import matplotlib.pyplot as plt
-import pandas as pd
-import streamlit as st
 import gdown
-import tempfile
-import os
-import pandas as pd
-import streamlit as st
 
 def load_data_from_drive():
     file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti sesuai file ID
@@ -22,32 +15,38 @@ def load_data_from_drive():
     
     df = pd.read_excel(url)
 
+    # Pastikan kolom yang diperlukan ada dan isi NaN diisi default
     df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
     df['director'] = df.get('director', pd.Series()).fillna('Unknown')
     df['country'] = df.get('country', pd.Series()).fillna('Unknown')
     
-    # Pastikan kolom release_year ada, jika tidak ada buat kolom kosong dulu
+    # Kolom release_year diubah jadi numerik dengan median sebagai pengisi NaN
     if 'release_year' in df.columns:
-        # Konversi ke numerik, dengan coerce jadi NaN untuk nilai invalid
         release_year_num = pd.to_numeric(df['release_year'], errors='coerce')
-        # Hitung median hanya jika ada nilai valid
         median_year = release_year_num.dropna().median()
-        # Jika median tidak tersedia, beri default 2000 (atau nilai lain)
         if pd.isna(median_year):
             median_year = 2000
         df['release_year'] = release_year_num.fillna(median_year)
     else:
         df['release_year'] = 2000  # default
     
-    # Lakukan hal sama untuk kolom lain jika perlu
+    # Isi NaN di kolom duration_min jika ada
+    if 'duration_min' in df.columns:
+        df['duration_min'] = pd.to_numeric(df['duration_min'], errors='coerce').fillna(df['duration_min'].median())
+    else:
+        df['duration_min'] = 90  # default durasi
 
     return df
 
+def preprocess_features(df):
+    # Gabungkan kolom teks yang relevan jadi 1 kolom string untuk tfidf
+    cols_to_combine = ['director', 'country', 'listed_in', 'genres']
+    for col in cols_to_combine:
+        if col not in df.columns:
+            df[col] = ''
+    df['combined_features'] = df[cols_to_combine].astype(str).agg(' '.join, axis=1)
+    return df
 
-# Contoh panggilan
-df_full = load_data_from_drive()
-
-# === TF-IDF dan KNN ===
 @st.cache_resource
 def build_model(data):
     tfidf = TfidfVectorizer(stop_words='english')
@@ -63,9 +62,6 @@ def build_model(data):
     knn.fit(X)
     return knn, X
 
-knn, X = build_model(df_full)
-
-# === Rekomendasi ===
 def get_recommendations(title, tipe, n=5):
     df = df_full[df_full['type'].str.lower() == tipe.lower()]
     matches = df[df['title'].str.lower() == title.lower()]
@@ -85,10 +81,16 @@ def get_recommendations(title, tipe, n=5):
             'Release Year': int(movie['release_year']),
             'Type': movie['type'],
             'Director': movie['director'],
-            'Genres': ', '.join(movie['genres']),
+            'Genres': movie['genres'] if isinstance(movie['genres'], str) else ', '.join(movie['genres']),
             'Similarity': similarity
         })
     return pd.DataFrame(recs)
+
+# === MAIN ===
+df_full = load_data_from_drive()
+df_full = preprocess_features(df_full)
+
+knn, X = build_model(df_full)
 
 # === STREAMLIT UI ===
 st.title("🎬 Rekomendasi Film Netflix")
@@ -100,8 +102,8 @@ film_selected = st.selectbox("Pilih Judul Film:", film_list)
 if st.button("Tampilkan Rekomendasi"):
     hasil = get_recommendations(film_selected, tipe_pilihan, n=5)
     
-    if hasil is None:
-        st.warning("Film tidak ditemukan.")
+    if hasil is None or hasil.empty:
+        st.warning("Film tidak ditemukan atau tidak ada rekomendasi.")
     else:
         st.subheader(f"Hasil Rekomendasi untuk '{film_selected}'")
         st.dataframe(hasil)
@@ -120,7 +122,7 @@ if st.button("Tampilkan Rekomendasi"):
         ax1.set_ylabel("Genre")
         st.pyplot(fig1)
 
-        # Pie chart tipe (walau akan selalu 1 tipe saat difilter)
+        # Pie chart tipe (biasanya 1 tipe)
         st.subheader("📊 Tipe Film")
         tipe_count = hasil['Type'].value_counts()
         fig2, ax2 = plt.subplots()
@@ -129,4 +131,3 @@ if st.button("Tampilkan Rekomendasi"):
         st.pyplot(fig2)
 
         st.success("Rekomendasi selesai ditampilkan ✅")
-
