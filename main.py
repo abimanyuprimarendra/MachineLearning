@@ -1,4 +1,3 @@
-# streamlit_app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,20 +6,16 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse import hstack, csr_matrix
 import matplotlib.pyplot as plt
-import gdown
 
 def load_data_from_drive():
     file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti sesuai file ID
     url = f'https://drive.google.com/uc?id={file_id}&export=download'
-    
     df = pd.read_excel(url)
 
-    # Pastikan kolom yang diperlukan ada dan isi NaN diisi default
     df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
     df['director'] = df.get('director', pd.Series()).fillna('Unknown')
     df['country'] = df.get('country', pd.Series()).fillna('Unknown')
-    
-    # Kolom release_year diubah jadi numerik dengan median sebagai pengisi NaN
+
     if 'release_year' in df.columns:
         release_year_num = pd.to_numeric(df['release_year'], errors='coerce')
         median_year = release_year_num.dropna().median()
@@ -28,18 +23,16 @@ def load_data_from_drive():
             median_year = 2000
         df['release_year'] = release_year_num.fillna(median_year)
     else:
-        df['release_year'] = 2000  # default
-    
-    # Isi NaN di kolom duration_min jika ada
+        df['release_year'] = 2000
+
     if 'duration_min' in df.columns:
         df['duration_min'] = pd.to_numeric(df['duration_min'], errors='coerce').fillna(df['duration_min'].median())
     else:
-        df['duration_min'] = 90  # default durasi
+        df['duration_min'] = 90
 
     return df
 
 def preprocess_features(df):
-    # Gabungkan kolom teks yang relevan jadi 1 kolom string untuk tfidf
     cols_to_combine = ['director', 'country', 'listed_in', 'genres']
     for col in cols_to_combine:
         if col not in df.columns:
@@ -67,7 +60,6 @@ def get_recommendations(title, tipe, n=5):
         return None
 
     df = df_full[df_full['type'].str.lower() == tipe.lower()]
-    # Pastikan kolom 'title' tidak ada NaN dan bertipe string
     df = df[df['title'].notna()]
     df = df[df['title'].apply(lambda x: isinstance(x, str))]
 
@@ -104,38 +96,61 @@ knn, X = build_model(df_full)
 st.title("🎬 Rekomendasi Film Netflix")
 
 tipe_pilihan = st.selectbox("Pilih Tipe:", ['Movie', 'TV Show'])
-film_list = sorted(df_full[df_full['type'] == tipe_pilihan]['title'].unique())
-film_selected = st.selectbox("Pilih Judul Film:", film_list)
 
-if st.button("Tampilkan Rekomendasi"):
-    hasil = get_recommendations(film_selected, tipe_pilihan, n=5)
-    
-    if hasil is None or hasil.empty:
-        st.warning("Film tidak ditemukan atau tidak ada rekomendasi.")
+# Input pencarian film dengan teks bebas
+search_title = st.text_input("Cari film (ketik judul lengkap atau sebagian):")
+
+if search_title:
+    filtered_titles = df_full[
+        df_full['title'].str.contains(search_title, case=False, na=False) &
+        (df_full['type'].str.lower() == tipe_pilihan.lower())
+    ]['title'].unique()
+    if filtered_titles.size > 0:
+        film_selected = st.selectbox("Hasil pencarian:", sorted(filtered_titles))
     else:
-        st.subheader(f"Hasil Rekomendasi untuk '{film_selected}'")
-        st.dataframe(hasil)
+        st.warning("Tidak ditemukan film dengan kata kunci tersebut.")
+        film_selected = None
+else:
+    film_list = sorted(df_full[df_full['type'].str.lower() == tipe_pilihan.lower()]['title'].unique())
+    film_selected = st.selectbox("Pilih Judul Film:", film_list)
 
-        # Visualisasi Similarity
-        st.subheader("🔍 Skor Kemiripan")
-        st.bar_chart(hasil.set_index('Title')['Similarity'])
+if film_selected:
+    film_info = df_full[df_full['title'] == film_selected].iloc[0]
+    st.markdown(f"**Judul:** {film_info['title']}")
+    st.markdown(f"**Tipe:** {film_info['type']}")
+    st.markdown(f"**Tahun Rilis:** {film_info['release_year']}")
+    st.markdown(f"**Durasi (menit):** {film_info['duration_min']}")
+    st.markdown(f"**Direktur:** {film_info['director']}")
+    st.markdown(f"**Negara:** {film_info['country']}")
+    st.markdown(f"**Genre:** {film_info['genres']}")
 
-        # Visualisasi Genre
-        st.subheader("🎭 Distribusi Genre")
-        all_genres = hasil['Genres'].str.split(', ').explode()
-        genre_count = all_genres.value_counts().head(10)
-        fig1, ax1 = plt.subplots()
-        genre_count.plot(kind='barh', color='skyblue', ax=ax1)
-        ax1.set_xlabel("Jumlah")
-        ax1.set_ylabel("Genre")
-        st.pyplot(fig1)
+    if st.button("Tampilkan Rekomendasi"):
+        with st.spinner("Mencari rekomendasi..."):
+            hasil = get_recommendations(film_selected, tipe_pilihan, n=5)
 
-        # Pie chart tipe (biasanya 1 tipe)
-        st.subheader("📊 Tipe Film")
-        tipe_count = hasil['Type'].value_counts()
-        fig2, ax2 = plt.subplots()
-        ax2.pie(tipe_count, labels=tipe_count.index, autopct='%1.1f%%', startangle=90)
-        ax2.axis('equal')
-        st.pyplot(fig2)
+        if hasil is None or hasil.empty:
+            st.warning("Film tidak ditemukan atau tidak ada rekomendasi.")
+        else:
+            st.subheader(f"Hasil Rekomendasi untuk '{film_selected}'")
+            st.dataframe(hasil)
 
-        st.success("Rekomendasi selesai ditampilkan ✅")
+            st.subheader("🔍 Skor Kemiripan")
+            st.bar_chart(hasil.set_index('Title')['Similarity'])
+
+            st.subheader("🎭 Distribusi Genre")
+            all_genres = hasil['Genres'].str.split(', ').explode()
+            genre_count = all_genres.value_counts().head(10)
+            fig1, ax1 = plt.subplots()
+            genre_count.plot(kind='barh', color='skyblue', ax=ax1)
+            ax1.set_xlabel("Jumlah")
+            ax1.set_ylabel("Genre")
+            st.pyplot(fig1)
+
+            st.subheader("📊 Tipe Film")
+            tipe_count = hasil['Type'].value_counts()
+            fig2, ax2 = plt.subplots()
+            ax2.pie(tipe_count, labels=tipe_count.index, autopct='%1.1f%%', startangle=90)
+            ax2.axis('equal')
+            st.pyplot(fig2)
+
+            st.success("Rekomendasi selesai ditampilkan ✅")
