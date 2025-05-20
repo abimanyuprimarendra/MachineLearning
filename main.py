@@ -10,7 +10,7 @@ import re
 # --- Load data dan preprocessing ---
 @st.cache_data
 def load_data_from_drive():
-    csv_url = "https://drive.google.com/file/d/1snEw9T4JdILb2_QVSbnXfHC5uoki_tOm?hl/view?usp=sharing"
+    csv_url = "https://drive.google.com/uc?id=1snEw9T4JdILb2_QVSbnXfHC5uoki_tOm"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
     data['director'] = data['director'].fillna('Unknown')
