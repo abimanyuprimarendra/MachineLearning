@@ -17,7 +17,7 @@ def load_data_from_drive():
     # Link sharing file Excel dari Google Drive harus diubah ke format download langsung
     # Contoh: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
     # Jadi diubah ke: https://drive.google.com/uc?id=FILE_ID&export=download
-    file_id = 'YOUR_FILE_ID_HERE'  # ganti dengan file ID Google Drive kamu
+    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti dengan file ID Google Drive kamu
     url = f'https://drive.google.com/uc?id={file_id}&export=download'
     
     df = pd.read_excel(url)
