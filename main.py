@@ -109,4 +109,4 @@ if selected_title:
         sns.lineplot(x=year_counts.index, y=year_counts.values, marker='o', ax=ax2)
         ax2.set_xlabel("Tahun Rilis")
         ax2.set_ylabel("Jumlah Film")
-        st.pyplot(fig2) ini perbaiki yang salah saja
+        st.pyplot(fig2)
