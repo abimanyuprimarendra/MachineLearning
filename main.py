@@ -12,22 +12,32 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
+import gdown
+import tempfile
+import os
+import pandas as pd
+import streamlit as st
+
 @st.cache_data
 def load_data_from_drive():
-    # Link sharing file Excel dari Google Drive harus diubah ke format download langsung
-    # Contoh: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-    # Jadi diubah ke: https://drive.google.com/uc?id=FILE_ID&export=download
-    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti dengan file ID Google Drive kamu
-    url = f'https://drive.google.com/uc?id={file_id}&export=download'
+    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti dengan ID file kamu
+    url = f'https://drive.google.com/uc?id={file_id}'
     
-    df = pd.read_excel(url)
-    # Isi nilai kosong & preprocessing sederhana
+    # Buat temporary file
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        temp_path = os.path.join(tmp_dir, 'Netflix.xlsx')
+        gdown.download(url, temp_path, quiet=True)
+        df = pd.read_excel(temp_path)
+
+    # Preprocessing
     df['listed_in'] = df['listed_in'].fillna('')
     df['director'] = df['director'].fillna('Unknown')
     df['country'] = df['country'].fillna('Unknown')
     df['release_year'] = pd.to_numeric(df['release_year'], errors='coerce').fillna(df['release_year'].median())
-    # Bisa ditambah proses lain jika perlu
+    # Jangan lupa fitur lain seperti 'duration_min', 'combined_features' sesuai kode utama
     
+    return df
+
     return df
 
 # Contoh panggilan
