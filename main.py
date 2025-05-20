@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
+import time
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 st.set_page_config(page_title="Netflix Movie Recommender", layout="wide")
 
@@ -30,21 +32,30 @@ def create_knn_model(tfidf_matrix):
     knn_model.fit(tfidf_matrix)
     return knn_model
 
-def get_recommendations(title, df, cosine_sim, knn_model, tfidf_matrix, n=10):
+def get_cosine_recommendations(title, df, cosine_sim, n=10):
+    start_time = time.time()
     if title not in df['title'].values:
-        return [], []
+        return [], 0
     idx = df[df['title'] == title].index[0]
 
-    # Cosine similarity
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:n+1]
     cosine_recs = [(df['title'].iloc[i], score) for i, score in sim_scores]
 
-    # KNN
+    exec_time = time.time() - start_time
+    return cosine_recs, exec_time
+
+def get_knn_recommendations(title, df, knn_model, tfidf_matrix, n=10):
+    start_time = time.time()
+    if title not in df['title'].values:
+        return [], 0
+    idx = df[df['title'] == title].index[0]
+
     distances, indices = knn_model.kneighbors(tfidf_matrix[idx], n_neighbors=n+1)
     knn_recs = [(df['title'].iloc[i], 1 - dist) for i, dist in zip(indices.flatten()[1:], distances.flatten()[1:])]
 
-    return cosine_recs, knn_recs
+    exec_time = time.time() - start_time
+    return knn_recs, exec_time
 
 def plot_similarity_scores(recommendations, method_name):
     titles = [x[0] for x in recommendations]
@@ -65,6 +76,7 @@ tfidf_matrix = create_tfidf_matrix(df)
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 knn_model = create_knn_model(tfidf_matrix)
 
+# Pilih satu judul film dari dropdown
 selected_title = st.selectbox(
     "Pilih judul film untuk mendapatkan rekomendasi:",
     options=df['title'].sort_values().unique(),
@@ -72,25 +84,34 @@ selected_title = st.selectbox(
 )
 
 if selected_title:
-    with st.spinner("Menghitung rekomendasi..."):
-        cosine_recs, knn_recs = get_recommendations(selected_title, df, cosine_sim, knn_model, tfidf_matrix)
+    # Cari indeks film pilihan
+    idx = df[df['title'] == selected_title].index[0]
 
-    st.markdown(f"### Rekomendasi film mirip dengan **{selected_title}**")
+    # Untuk KNN, kita pilih film lain secara acak agar beda dengan yang dipilih cosine similarity
+    titles_except_selected = df['title'].drop(idx)
+    knn_selected_title = np.random.choice(titles_except_selected)
 
-    col1, col2 = st.columns(2)
+    # Hitung rekomendasi dan waktu eksekusi
+    cosine_recs, cosine_time = get_cosine_recommendations(selected_title, df, cosine_sim)
+    knn_recs, knn_time = get_knn_recommendations(knn_selected_title, df, knn_model, tfidf_matrix)
 
+    st.markdown(f"### Rekomendasi film mirip dengan **{selected_title}** (Cosine Similarity)")
+    st.write(f"Waktu eksekusi: {cosine_time:.4f} detik")
+    col1 = st.container()
     with col1:
-        st.subheader("Rekomendasi Berdasarkan Cosine Similarity")
         for title, score in cosine_recs:
             st.write(f"- {title} (score: {score:.4f})")
         plot_similarity_scores(cosine_recs, "Cosine Similarity")
 
+    st.markdown(f"### Rekomendasi film mirip dengan **{knn_selected_title}** (KNN)")
+    st.write(f"Waktu eksekusi: {knn_time:.4f} detik")
+    col2 = st.container()
     with col2:
-        st.subheader("Rekomendasi Berdasarkan KNN")
         for title, score in knn_recs:
             st.write(f"- {title} (score: {score:.4f})")
         plot_similarity_scores(knn_recs, "KNN")
 
+    # Visualisasi tambahan: distribusi genre film dataset
     st.markdown("---")
     st.subheader("Distribusi Genre Film di Dataset")
     genre_counts = df['listed_in'].str.split(',').explode().str.strip().value_counts()
