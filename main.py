@@ -29,6 +29,7 @@ def extract_duration(row):
     if not match:
         return 0
     jumlah = int(match.group(1))
+    # TV Show diberikan bobot lebih besar agar bisa dibedakan
     if tipe == 'movie':
         return jumlah
     elif tipe == 'tv show':
@@ -63,17 +64,21 @@ def build_model(X):
     return knn
 
 def recommend(df, knn, X, movie_title, n_recommendations=5, filter_type=None):
+    # Filter berdasarkan tipe jika ada filter_type
     if filter_type is not None:
         df_filtered = df[df['type'].str.lower() == filter_type.lower()]
+        if df_filtered.empty:
+            return f"Tidak ada film dengan tipe '{filter_type}' ditemukan."
     else:
         df_filtered = df
 
+    # Cari movie_title dalam df_filtered, case-insensitive
     matches = df_filtered[df_filtered['title'].str.lower() == movie_title.lower()]
     if matches.empty:
         return f"Film '{movie_title}' tidak ditemukan dalam tipe '{filter_type or 'Movie/TV Show'}'!"
     
     idx = matches.index[0]
-    distances, indices = knn.kneighbors(X[idx], n_neighbors=n_recommendations+1)
+    distances, indices = knn.kneighbors(X[idx], n_neighbors=n_recommendations + 1)
     
     recs = []
     for i in range(1, len(indices[0])):
@@ -112,16 +117,16 @@ selected_type = st.selectbox(
     key='selected_type'
 )
 
-# Fungsi untuk ambil list film sesuai tipe terpilih
 def get_filtered_titles(selected_type_lower):
-    return sorted(df[df['type'] == selected_type_lower]['title'].unique())
+    titles = sorted(df[df['type'] == selected_type_lower]['title'].unique())
+    return titles
 
 filtered_titles = get_filtered_titles(selected_type.lower())
 
-if len(filtered_titles) == 0:
+if not filtered_titles:
     st.warning("Tidak ada film ditemukan untuk tipe ini.")
 else:
-    # Update session state default judul film
+    # Update session state default judul film supaya tidak error
     if 'selected_title' not in st.session_state or st.session_state.selected_title not in filtered_titles:
         st.session_state.selected_title = filtered_titles[0]
 
@@ -137,9 +142,9 @@ else:
         if isinstance(results, str):
             st.warning(results)
         else:
-            st.write(f"Rekomendasi film mirip dengan **{selected_title}** (Tipe: {selected_type.title()}):")
+            st.markdown(f"### Rekomendasi film mirip dengan **{selected_title}** (Tipe: {selected_type.title()})")
             for i, rec in enumerate(results, 1):
-                st.markdown(f"**{i}. {rec['Title']}** ({rec['Year']}) - {rec['Type']}")
+                st.markdown(f"**{i}. {rec['Title']}** ({rec['Year']}) - {rec['Type'].title()}")
                 st.markdown(f"- Director: {rec['Director']}")
                 st.markdown(f"- Genres: {rec['Genres']}")
                 st.markdown(f"- Similarity Score: {rec['Similarity']:.4f}")
