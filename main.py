@@ -9,11 +9,8 @@ import matplotlib.pyplot as plt
 
 @st.cache_data
 def load_data_from_drive():
-    # Menggunakan Google Sheets dalam format CSV
-    file_id = '1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB'
-    url = f'https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv'
-
-    df = pd.read_csv(url)
+    csv_url = 'https://docs.google.com/spreadsheets/d/1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB/export?format=csv'
+    df = pd.read_csv(csv_url)
 
     # Pastikan kolom tersedia dan bersih
     df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
@@ -39,6 +36,7 @@ def load_data_from_drive():
         df['genres'] = df['listed_in'].apply(lambda x: [g.strip() for g in x.split(',')] if x else [])
 
     return df
+
 
 def preprocess_features(df):
     df = df.copy()
