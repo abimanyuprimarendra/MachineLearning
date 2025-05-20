@@ -8,37 +8,41 @@ from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse import hstack, csr_matrix
 import re
 import matplotlib.pyplot as plt
-
 import pandas as pd
 import streamlit as st
-
 import gdown
 import tempfile
 import os
 import pandas as pd
 import streamlit as st
 
-@st.cache_data
 def load_data_from_drive():
-    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti dengan ID file kamu
-    url = f'https://drive.google.com/uc?id={file_id}'
+    file_id = '13iDxqKf2Jh9CpYSfXOQ76dEMfoUnRs89'  # ganti sesuai file ID
+    url = f'https://drive.google.com/uc?id={file_id}&export=download'
     
-    # Buat temporary file
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        temp_path = os.path.join(tmp_dir, 'Netflix.xlsx')
-        gdown.download(url, temp_path, quiet=True)
-        df = pd.read_excel(temp_path)
+    df = pd.read_excel(url)
 
-    # Preprocessing
-    df['listed_in'] = df['listed_in'].fillna('')
-    df['director'] = df['director'].fillna('Unknown')
-    df['country'] = df['country'].fillna('Unknown')
-    df['release_year'] = pd.to_numeric(df['release_year'], errors='coerce').fillna(df['release_year'].median())
-    # Jangan lupa fitur lain seperti 'duration_min', 'combined_features' sesuai kode utama
+    df['listed_in'] = df.get('listed_in', pd.Series()).fillna('')
+    df['director'] = df.get('director', pd.Series()).fillna('Unknown')
+    df['country'] = df.get('country', pd.Series()).fillna('Unknown')
     
+    # Pastikan kolom release_year ada, jika tidak ada buat kolom kosong dulu
+    if 'release_year' in df.columns:
+        # Konversi ke numerik, dengan coerce jadi NaN untuk nilai invalid
+        release_year_num = pd.to_numeric(df['release_year'], errors='coerce')
+        # Hitung median hanya jika ada nilai valid
+        median_year = release_year_num.dropna().median()
+        # Jika median tidak tersedia, beri default 2000 (atau nilai lain)
+        if pd.isna(median_year):
+            median_year = 2000
+        df['release_year'] = release_year_num.fillna(median_year)
+    else:
+        df['release_year'] = 2000  # default
+    
+    # Lakukan hal sama untuk kolom lain jika perlu
+
     return df
 
-    return df
 
 # Contoh panggilan
 df_full = load_data_from_drive()
