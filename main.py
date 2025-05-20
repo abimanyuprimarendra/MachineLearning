@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse import hstack, csr_matrix
 import re
 
-# Load dataset dari Google Drive CSV
+# --- Load data dan preprocessing ---
 @st.cache_data
 def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB"
@@ -19,6 +19,7 @@ def load_data_from_drive():
     data['release_year'] = data['release_year'].fillna(data['release_year'].median())
     data['title'] = data['title'].astype(str).apply(lambda x: re.sub(r'[^\w\s]', '', x))
     data['genres'] = data['listed_in'].apply(lambda x: [g.strip() for g in x.split(',')])
+    data['type'] = data['type'].str.strip().str.lower()
     return data
 
 def extract_duration(row):
@@ -89,28 +90,54 @@ def recommend(df, knn, X, movie_title, n_recommendations=5, filter_type=None):
         })
     return recs
 
-# Bersihkan kolom type
-df['type'] = df['type'].str.strip().str.lower()
+# === MAIN APP ===
+st.title("Rekomendasi Film Mirip Netflix")
 
+# Load & siapkan data (cached)
+df = load_data_from_drive()
+df, X = prepare_data(df)
+knn = build_model(X)
+
+# Dropdown tipe film
 type_options = ['movie', 'tv show']
-filter_type = st.selectbox("Pilih Tipe Film", [t.title() for t in type_options])
-filter_type_lower = filter_type.lower()
 
-filtered_titles = sorted(df[df['type'] == filter_type_lower]['title'].unique())
+# Session state setup default tipe film
+if 'selected_type' not in st.session_state:
+    st.session_state.selected_type = 'movie'
 
-st.write(f"Jumlah film ditemukan: {len(filtered_titles)}")  # untuk debugging
+selected_type = st.selectbox(
+    "Pilih Tipe Film",
+    options=[t.title() for t in type_options],
+    index=type_options.index(st.session_state.selected_type),
+    key='selected_type'
+)
+
+# Fungsi untuk ambil list film sesuai tipe terpilih
+def get_filtered_titles(selected_type_lower):
+    return sorted(df[df['type'] == selected_type_lower]['title'].unique())
+
+filtered_titles = get_filtered_titles(selected_type.lower())
 
 if len(filtered_titles) == 0:
     st.warning("Tidak ada film ditemukan untuk tipe ini.")
 else:
-    selected_title = st.selectbox("Pilih Film", filtered_titles)
+    # Update session state default judul film
+    if 'selected_title' not in st.session_state or st.session_state.selected_title not in filtered_titles:
+        st.session_state.selected_title = filtered_titles[0]
+
+    selected_title = st.selectbox(
+        "Pilih Film",
+        options=filtered_titles,
+        index=filtered_titles.index(st.session_state.selected_title),
+        key='selected_title'
+    )
 
     if st.button("Rekomendasikan Film Mirip"):
-        results = recommend(df, knn, X, selected_title, filter_type=filter_type)
+        results = recommend(df, knn, X, selected_title, filter_type=selected_type)
         if isinstance(results, str):
             st.warning(results)
         else:
-            st.write(f"Rekomendasi film mirip dengan **{selected_title}** (Tipe: {filter_type}):")
+            st.write(f"Rekomendasi film mirip dengan **{selected_title}** (Tipe: {selected_type.title()}):")
             for i, rec in enumerate(results, 1):
                 st.markdown(f"**{i}. {rec['Title']}** ({rec['Year']}) - {rec['Type']}")
                 st.markdown(f"- Director: {rec['Director']}")
