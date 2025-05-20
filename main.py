@@ -80,10 +80,10 @@ if title:
         cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df)
         knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix)
 
-        st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk '{title}':")
+        st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk {title}:")
         for rec_title, score in cosine_recs:
             st.write(f"- {rec_title} (similarity: {score:.4f})")
 
-        st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title}':")
+        st.subheader(f"Rekomendasi berdasarkan KNN untuk {title}:")
         for rec_title, score in knn_recs:
             st.write(f"- {rec_title} (similarity: {score:.4f})")
