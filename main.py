@@ -23,7 +23,7 @@ def create_tfidf_matrix(df):
     tfidf_matrix = tfidf.fit_transform(df['combined'])
     return tfidf_matrix
 
-@st.cache_data(show_spinner=False)
+@st.cache_resource
 def create_knn_model(tfidf_matrix):
     knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
     knn_model.fit(tfidf_matrix)
