@@ -5,7 +5,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
-# Harus diletakkan di paling awal, sebelum perintah Streamlit lain seperti st.title, st.write, dsb.
 st.set_page_config(page_title="🎬 Rekomendasi Film Netflix", layout="centered")
 
 @st.cache_data
@@ -52,56 +51,42 @@ def get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, top_
     recommended = [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
     return recommended
 
-def measure_avg_time(func, title, runs=10):
-    times = []
-    for _ in range(runs):
-        start = time.time()
-        func(title)
-        end = time.time()
-        times.append(end - start)
-    avg_time = sum(times) / runs
-    return avg_time
-
 st.title("Sistem Rekomendasi Film Netflix")
 
 df = load_data_from_drive()
 tfidf_matrix = create_tfidf_matrix(df)
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 knn_model = create_knn_model(tfidf_matrix)
 
-title = st.selectbox("Pilih judul film untuk direkomendasikan:", options=df['title'].sort_values().unique())
+# Pilihan film untuk masing-masing metode
+title_cosine = st.selectbox("Pilih judul film untuk Cosine Similarity:", options=df['title'].sort_values().unique())
+title_knn = st.selectbox("Pilih judul film untuk KNN:", options=df['title'].sort_values().unique())
 
-if title:
+if title_cosine and title_knn:
     with st.spinner("Menghitung rekomendasi..."):
-        cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-        
-        avg_time_cosine = measure_avg_time(
-            lambda t=title: get_content_based_recommendations_with_scores(t, cosine_sim, df, top_n=1), title)
-        avg_time_knn = measure_avg_time(
-            lambda t=title: get_knn_recommendations_with_scores(t, knn_model, df, tfidf_matrix, top_n=1), title)
+        cosine_recs = get_content_based_recommendations_with_scores(title_cosine, cosine_sim, df, top_n=5)
+        knn_recs = get_knn_recommendations_with_scores(title_knn, knn_model, df, tfidf_matrix, top_n=5)
 
-        st.write(f"Rata-rata waktu eksekusi Cosine Similarity (1 rekomendasi): **{avg_time_cosine:.5f} detik**")
-        st.write(f"Rata-rata waktu eksekusi KNN (1 rekomendasi): **{avg_time_knn:.5f} detik**")
+        st.subheader(f"Rekomendasi Cosine Similarity untuk '{title_cosine}':")
+        if isinstance(cosine_recs, str):
+            st.write(cosine_recs)
+        else:
+            for rec_title, score in cosine_recs:
+                st.write(f"- {rec_title} (similarity: {score:.4f})")
 
-        cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df, top_n=1)
-        knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, top_n=1)
-
-        st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk '{title}':")
-        for rec_title, score in cosine_recs:
-            st.write(f"- {rec_title} (similarity: {score:.4f})")
-
-        st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title}':")
-        for rec_title, score in knn_recs:
-            st.write(f"- {rec_title} (similarity: {score:.4f})")
+        st.subheader(f"Rekomendasi KNN untuk '{title_knn}':")
+        if isinstance(knn_recs, str):
+            st.write(knn_recs)
+        else:
+            for rec_title, score in knn_recs:
+                st.write(f"- {rec_title} (similarity: {score:.4f})")
 
     st.markdown("""
     ---
-    ### Perbandingan Metode Rekomendasi
+    ### Perbandingan Metode
 
-    Kedua metode menggunakan data dan film input yang sama, namun berbeda dalam cara pengukuran dan efisiensi:
+    - **Cosine Similarity**: rekomendasi berdasar kemiripan global vektor TF-IDF.
+    - **KNN**: rekomendasi berdasar pencarian tetangga terdekat secara efisien.
 
-    - **Cosine Similarity** menghitung skor kesamaan secara global antara semua film. Ini memberi gambaran menyeluruh, namun bisa lambat jika data sangat besar.
-
-    - **K-Nearest Neighbors (KNN)** fokus pada pencarian tetangga terdekat untuk film yang dipilih. Ini lebih efisien untuk aplikasi real-time dan dataset besar.
-
-    Hasil rekomendasi keduanya biasanya mirip, namun KNN lebih scalable dan praktis untuk sistem rekomendasi.
+    Pilih film berbeda di tiap metode untuk melihat bagaimana rekomendasi bisa berbeda sesuai konteks film input.
     """)
