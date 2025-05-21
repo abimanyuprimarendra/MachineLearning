@@ -106,7 +106,15 @@ df = load_data()
 if not df.empty:
     vectorizer, tfidf_matrix, knn = prepare_model(df)
 
-    title_input = st.text_input("Masukkan judul film", "Cobra Kai")
+    # Buat list judul film terurut unik untuk dropdown
+    film_list = df['title'].dropna().sort_values().unique()
+    default_idx = 0
+    if "Cobra Kai" in film_list:
+        default_idx = film_list.tolist().index("Cobra Kai")
+
+    # Ganti input judul film jadi selectbox
+    title_input = st.selectbox("Pilih judul film", film_list, index=default_idx)
+
     n = st.slider("Jumlah rekomendasi", 1, 20, 10)
     min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
     min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
