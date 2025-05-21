@@ -14,8 +14,12 @@ def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
-    # Kolom description tidak ada, jadi tidak dipakai
-    data['combined'] = data['title'] + " " + data['listed_in']
+    # cek kolom description sebelum fillna
+    if 'description' in data.columns:
+        data['description'] = data['description'].fillna('')
+    else:
+        data['description'] = ''
+    data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
     return data
 
 @st.cache_data(show_spinner=False)
@@ -24,8 +28,9 @@ def create_tfidf_matrix(df):
     tfidf_matrix = tfidf.fit_transform(df['combined'])
     return tfidf_matrix
 
+# buat fungsi create_knn_model tanpa argumen, pakai tfidf_matrix global
 @st.cache_resource(show_spinner=False)
-def create_knn_model(tfidf_matrix):
+def create_knn_model():
     knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
     knn_model.fit(tfidf_matrix)
     return knn_model
@@ -77,21 +82,20 @@ st.title("Sistem Rekomendasi Film Netflix")
 # Load data dan buat tfidf matrix
 df = load_data_from_drive()
 tfidf_matrix = create_tfidf_matrix(df)
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-knn_model = create_knn_model(tfidf_matrix)
+knn_model = create_knn_model()  # panggil tanpa argumen
 
 # Pilihan film dari dataset
 title = st.selectbox("Pilih judul film untuk direkomendasikan:", options=df['title'].sort_values().unique())
 
 if title:
     with st.spinner("Menghitung rekomendasi..."):
-        avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_sim, df), title)
+        avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_similarity(tfidf_matrix, tfidf_matrix), df), title)
         avg_time_knn = measure_avg_time(lambda t=title: get_knn_recommendations_with_scores(t, knn_model, df, tfidf_matrix), title)
 
         st.write(f"Rata-rata waktu eksekusi Cosine Similarity: **{avg_time_cosine:.5f} detik**")
         st.write(f"Rata-rata waktu eksekusi KNN: **{avg_time_knn:.5f} detik**")
 
-        cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df)
+        cosine_recs = get_content_based_recommendations_with_scores(title, cosine_similarity(tfidf_matrix, tfidf_matrix), df)
         knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix)
 
         st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk '{title}':")
