@@ -4,59 +4,54 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 from numpy import log1p
-import difflib
 
 # Load dataset dari Google Drive
 @st.cache_data
 def load_data():
     csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
-    try:
-        df = pd.read_csv(csv_url)
+    df = pd.read_csv(csv_url)
 
-        # Bersihkan votes dan rating
-        df['votes'] = df['votes'].fillna('0').str.replace(',', '', regex=False).astype(int)
-        df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
+    # Bersihkan votes dan rating
+    df['votes'] = df['votes'].fillna('0').str.replace(',', '', regex=False).astype(int)
+    df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
 
-        # Pembersihan teks
-        def clean_text(text):
-            text = str(text).lower()
-            text = re.sub(r'[^a-z0-9\s]', ' ', text)
-            text = re.sub(r'\s+', ' ', text).strip()
-            return text
+    # Fungsi pembersihan teks
+    def clean_text(text):
+        text = str(text).lower()
+        text = re.sub(r'[^a-z0-9\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
 
-        for col in ['genre', 'description', 'stars']:
-            df[col] = df[col].fillna('').apply(clean_text)
+    # Bersihkan kolom genre, description, stars
+    for col in ['genre', 'description', 'stars']:
+        df[col] = df[col].fillna('').apply(clean_text)
 
-        # Gabungkan fitur
-        df['combined_features'] = (
-            (df['genre'] + ' ') * 2 +
-            (df['stars'] + ' ') * 2 +
-            df['description']
-        )
-        return df
-    except Exception as e:
-        st.error(f"Gagal memuat data: {e}")
-        return pd.DataFrame()
+    # Gabungkan fitur untuk TF-IDF
+    df['combined_features'] = (
+        (df['genre'] + ' ') * 2 +
+        (df['stars'] + ' ') * 2 +
+        df['description']
+    )
 
-# Siapkan model TF-IDF dan KNN
-@st.cache_resource
-def prepare_model(df):
-    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=10000)
-    tfidf_matrix = vectorizer.fit_transform(df['combined_features'])
+    return df
 
-    knn = NearestNeighbors(metric='cosine', algorithm='brute')
-    knn.fit(tfidf_matrix)
+# Load data
+df = load_data()
 
-    return vectorizer, tfidf_matrix, knn
+# TF-IDF dan KNN
+vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=10000)
+tfidf_matrix = vectorizer.fit_transform(df['combined_features'])
+
+knn = NearestNeighbors(metric='cosine', algorithm='brute')
+knn.fit(tfidf_matrix)
 
 # Fungsi rekomendasi
 def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
     idx_list = df.index[df['title'].str.lower() == title.lower()]
     if len(idx_list) == 0:
-        closest_matches = difflib.get_close_matches(title, df['title'], n=3)
-        return f"Film tidak ditemukan! Coba: {', '.join(closest_matches)}" if closest_matches else "Film tidak ditemukan!", None
-
+        return "Film tidak ditemukan!"
     idx = idx_list[0]
+
     distances, indices = knn.kneighbors(tfidf_matrix[idx], n_neighbors=50)
 
     recommendations = []
@@ -89,34 +84,27 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
             break
 
     if not recommendations:
-        return "Tidak ada film yang direkomendasikan berdasarkan kriteria.", None
+        return "Tidak ada film yang direkomendasikan berdasarkan kriteria."
 
     recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
-    df_result = pd.DataFrame(recommendations, columns=[
+
+    return pd.DataFrame(recommendations, columns=[
         'Title', 'Similarity', 'Rating', 'Votes', 'Score', 'Description'
     ])
-    return None, df_result
 
-# =======================
-# Streamlit App
-# =======================
+# Streamlit UI
 st.title("🎬 Sistem Rekomendasi Film")
 
-df = load_data()
-if not df.empty:
-    vectorizer, tfidf_matrix, knn = prepare_model(df)
+judul_input = st.text_input("Masukkan judul film", "Cobra Kai")
+n = st.slider("Jumlah rekomendasi", 1, 20, 10)
+min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
+min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
 
-    title_input = st.text_input("Masukkan judul film", "Cobra Kai")
-    n = st.slider("Jumlah rekomendasi", 1, 20, 10)
-    min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
-    min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
+if st.button("Rekomendasikan"):
+    hasil = recommend(judul_input, n, min_rating, min_votes)
 
-    if st.button("Rekomendasikan"):
-        error_msg, hasil = recommend(title_input, n, min_rating, min_votes)
-        if error_msg:
-            st.warning(error_msg)
-        else:
-            st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
-            st.dataframe(hasil.style.highlight_max(axis=0, subset=['Score']), use_container_width=True)
-else:
-    st.stop()
+    if isinstance(hasil, str):
+        st.warning(hasil)
+    else:
+        st.success(f"Berikut adalah {len(hasil)} film yang mirip dengan '{judul_input}' 🎉")
+        st.dataframe(hasil, use_container_width=True)
