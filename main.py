@@ -22,19 +22,24 @@ def load_data_from_drive():
 def create_tfidf_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['combined'])
-    return tfidf_matrix
+    return tfidf_matrix, tfidf # Mengembalikan tfidf juga, jika dibutuhkan untuk metrik lain
 
 # Membuat model KNN dengan metric 'cosine'
 @st.cache_resource
-def create_knn_model():
+def create_knn_cosine_model():
     # Metric 'cosine' artinya menggunakan jarak cosine (bukan similarity langsung)
-    # NearestNeighbors mencari tetangga terdekat berdasarkan jarak ini
     return NearestNeighbors(metric='cosine', algorithm='brute')
+
+# Membuat model KNN dengan metric 'euclidean'
+@st.cache_resource
+def create_knn_euclidean_model():
+    # Metric 'euclidean' artinya menggunakan jarak euclidean
+    return NearestNeighbors(metric='euclidean', algorithm='brute')
 
 # Fungsi rekomendasi berbasis cosine similarity full matrix
 def get_content_based_recommendations(title, cosine_sim, df, top_n=5):
     """
-    Cosine Similarity:
+    Cosign Similarity:
     Mengukur kemiripan dua vektor teks (film) dengan rumus:
     cosine_sim(A, B) = (A dot B) / (||A|| * ||B||)
     Menghasilkan nilai antara 0 (tidak mirip) sampai 1 (identik).
@@ -48,7 +53,7 @@ def get_content_based_recommendations(title, cosine_sim, df, top_n=5):
     return [(df['title'].iloc[i], score) for i, score in sim_scores]
 
 # Fungsi rekomendasi berbasis KNN dengan jarak cosine
-def get_knn_recommendations(title, knn_model, df, tfidf_matrix, top_n=5):
+def get_knn_cosine_recommendations(title, knn_model, df, tfidf_matrix, top_n=5):
     """
     KNN dengan metric 'cosine' menghitung jarak cosine:
     distance = 1 - cosine_similarity
@@ -65,47 +70,94 @@ def get_knn_recommendations(title, knn_model, df, tfidf_matrix, top_n=5):
     distances = distances.flatten()[1:]
     return [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
 
+# Fungsi rekomendasi berbasis KNN dengan jarak Euclidean
+def get_knn_euclidean_recommendations(title, knn_model, df, tfidf_matrix, top_n=5):
+    """
+    KNN dengan metric 'euclidean' menghitung jarak Euclidean.
+    Skor similarity dihitung sebagai 1 / (1 + distance) agar nilai lebih besar berarti lebih mirip.
+    """
+    if title not in df['title'].values:
+        return []
+    idx = df[df['title'] == title].index[0]
+    item_vector = tfidf_matrix[idx]
+    distances, indices_knn = knn_model.kneighbors(item_vector, n_neighbors=top_n + 1)
+    recommended_indices = indices_knn.flatten()[1:]
+    distances = distances.flatten()[1:]
+    
+    # Konversi jarak Euclidean ke skor "kemiripan" (yang lebih besar berarti lebih mirip)
+    # Salah satu cara umum: 1 / (1 + distance)
+    return [(df['title'].iloc[i], 1 / (1 + dist)) for i, dist in zip(recommended_indices, distances)]
+
+
 # Streamlit UI utama
 st.title("Perbandingan Rekomendasi Film: KNN vs Cosine Similarity")
 
 df = load_data_from_drive()
-tfidf_matrix = create_tfidf_matrix(df)
+tfidf_matrix, _ = create_tfidf_matrix(df) # tfidf_vectorizer tidak digunakan di sini, jadi diabaikan
 cosine_sim = cosine_similarity(tfidf_matrix)
 
-knn_model = create_knn_model()
-knn_model.fit(tfidf_matrix)  # Fit model sekali saja
+# Inisialisasi kedua model KNN
+knn_cosine_model = create_knn_cosine_model()
+knn_cosine_model.fit(tfidf_matrix)
+
+knn_euclidean_model = create_knn_euclidean_model()
+knn_euclidean_model.fit(tfidf_matrix)
 
 title = st.selectbox("Pilih judul film:", options=df['title'].sort_values().unique())
+selected_knn_metric = st.selectbox("Pilih Metrik KNN:", options=["Cosine", "Euclidean"])
 
 if title:
     cosine_recs = get_content_based_recommendations(title, cosine_sim, df)
-    knn_recs = get_knn_recommendations(title, knn_model, df, tfidf_matrix)
+    
+    knn_recs = []
+    knn_header_text = ""
+
+    if selected_knn_metric == "Cosine":
+        knn_recs = get_knn_cosine_recommendations(title, knn_cosine_model, df, tfidf_matrix)
+        knn_header_text = "KNN Recommendation (Cosine Metric)"
+    elif selected_knn_metric == "Euclidean":
+        knn_recs = get_knn_euclidean_recommendations(title, knn_euclidean_model, df, tfidf_matrix)
+        knn_header_text = "KNN Recommendation (Euclidean Metric)"
 
     # Tampilkan rekomendasi berdampingan
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Cosine Similarity")
-        for i, (rec_title, score) in enumerate(cosine_recs, 1):
-            st.write(f"{i}. {rec_title} (similarity: {score:.4f})")
+        if cosine_recs:
+            for i, (rec_title, score) in enumerate(cosine_recs, 1):
+                st.write(f"{i}. {rec_title} (similarity: {score:.4f})")
+        else:
+            st.write("Tidak ada rekomendasi yang ditemukan.")
 
     with col2:
-        st.subheader("KNN Recommendation")
-        for i, (rec_title, score) in enumerate(knn_recs, 1):
-            st.write(f"{i}. {rec_title} (similarity: {score:.4f})")
+        st.subheader(knn_header_text)
+        if knn_recs:
+            for i, (rec_title, score) in enumerate(knn_recs, 1):
+                st.write(f"{i}. {rec_title} (similarity: {score:.4f})")
+        else:
+            st.write("Tidak ada rekomendasi yang ditemukan.")
+
 
     # Visualisasi perbandingan skor similarity
-    st.subheader("Visualisasi Perbandingan Skor Similarity")
+    st.subheader("Visualisasi Perbandingan Skor Kemiripan")
+    
+    # Kumpulkan data untuk visualisasi
     combined_data = pd.DataFrame({
         'Film': [rec[0] for rec in cosine_recs] + [rec[0] for rec in knn_recs],
         'Similarity': [rec[1] for rec in cosine_recs] + [rec[1] for rec in knn_recs],
-        'Metode': ['Cosine'] * len(cosine_recs) + ['KNN'] * len(knn_recs)
+        'Metode': ['Cosine Similarity'] * len(cosine_recs) + [knn_header_text.replace(" Recommendation", "")] * len(knn_recs)
     })
 
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    plt.figure(figsize=(10, 5))
-    sns.barplot(data=combined_data, x='Similarity', y='Film', hue='Metode')
-    st.pyplot(plt.gcf())
+    if not combined_data.empty:
+        plt.figure(figsize=(12, 6)) # Ukuran plot lebih besar
+        sns.barplot(data=combined_data, x='Similarity', y='Film', hue='Metode', palette='viridis')
+        plt.title('Perbandingan Skor Kemiripan Rekomendasi')
+        plt.xlabel('Skor Kemiripan')
+        plt.ylabel('Judul Film')
+        plt.tight_layout() # Mengatur layout agar label tidak tumpang tindih
+        st.pyplot(plt.gcf())
+    else:
+        st.write("Tidak ada data untuk visualisasi.")
 
     # Tampilkan film yang direkomendasikan oleh kedua metode
     st.subheader("Film yang Direkomendasikan oleh Keduanya")
