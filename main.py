@@ -83,7 +83,7 @@ def get_knn_euclidean_recommendations(title, knn_model, df, tfidf_matrix, top_n=
     distances, indices_knn = knn_model.kneighbors(item_vector, n_neighbors=top_n + 1)
     recommended_indices = indices_knn.flatten()[1:]
     distances = distances.flatten()[1:]
-    
+
     # Konversi jarak Euclidean ke skor "kemiripan" (yang lebih besar berarti lebih mirip)
     # Salah satu cara umum: 1 / (1 + distance)
     return [(df['title'].iloc[i], 1 / (1 + dist)) for i, dist in zip(recommended_indices, distances)]
@@ -108,7 +108,7 @@ selected_knn_metric = st.selectbox("Pilih Metrik KNN:", options=["Cosine", "Eucl
 
 if title:
     cosine_recs = get_content_based_recommendations(title, cosine_sim, df)
-    
+
     knn_recs = []
     knn_header_text = ""
 
@@ -137,9 +137,9 @@ if title:
         else:
             st.write("Tidak ada rekomendasi yang ditemukan.")
 
-    ---
+    st.markdown("---") # Garis pemisah untuk visualisasi
     st.subheader("Visualisasi Perbandingan Skor Kemiripan")
-    
+
     # Kumpulkan data untuk visualisasi
     combined_data = pd.DataFrame({
         'Film': [rec[0] for rec in cosine_recs] + [rec[0] for rec in knn_recs],
@@ -158,20 +158,20 @@ if title:
     else:
         st.write("Tidak ada data untuk visualisasi.")
 
-    ---
+    st.markdown("---") # Garis pemisah untuk analisis metrik
     st.subheader("Analisis Metrik Perbandingan")
-    
+
     if cosine_recs and knn_recs:
         cosine_titles = set([title for title, _ in cosine_recs])
         knn_titles = set([title for title, _ in knn_recs])
-        
+
         common_titles = list(cosine_titles & knn_titles)
         num_common = len(common_titles)
-        
+
         # Ambil K yang sama dari kedua metode (biasanya top_n yang Anda set di fungsi)
         # Ambil minimum dari panjang list rekomendasi untuk menghindari indeks error
-        k_value = min(len(cosine_recs), len(knn_recs)) 
-        
+        k_value = min(len(cosine_recs), len(knn_recs))
+
         if k_value > 0:
             # Tingkat Kesamaan Rekomendasi (Overlap)
             overlap_percentage = (num_common / k_value) * 100
@@ -184,7 +184,7 @@ if title:
         st.write("#### Statistik Skor Kemiripan:")
         cosine_scores_list = [score for _, score in cosine_recs]
         knn_scores_list = [score for _, score in knn_recs]
-        
+
         if cosine_scores_list:
             cosine_scores_series = pd.Series(cosine_scores_list)
             st.write(f"**Cosine Similarity:**")
