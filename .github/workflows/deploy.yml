@@ -11,8 +11,7 @@ jobs:
     env:
       OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -23,10 +22,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run Streamlit App
-        run: streamlit run main.py
-        
-      - name: Debug print env variable
-        run: echo "OMDB_API_KEY is $OMDB_API_KEY"
-     -  name: Print env vars
-        run: env
-
+        run: |
+          echo "API key: $OMDB_API_KEY"
+          streamlit run main.py
