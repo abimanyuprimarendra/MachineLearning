@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import time
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
@@ -12,131 +10,94 @@ def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
-    data['description'] = data['description'].fillna('') if 'description' in data.columns else ''
+    if 'description' in data.columns:
+        data['description'] = data['description'].fillna('')
+    else:
+        data['description'] = ''
     data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
     return data
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def create_tfidf_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['combined'])
     return tfidf_matrix
 
 @st.cache_resource
-def create_knn_model():
-    return NearestNeighbors(metric='cosine', algorithm='brute')
+def create_knn_model(tfidf_matrix):
+    knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
+    knn_model.fit(tfidf_matrix)
+    return knn_model
 
-def get_content_based_recommendations(title, cosine_sim, df, top_n=5):
+def get_content_based_recommendations_with_scores(title, cosine_sim, df, top_n=5):
     if title not in df['title'].values:
-        return []
+        return "Judul tidak ditemukan di dataset."
     idx = df[df['title'] == title].index[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:top_n+1]
-    return [(df['title'].iloc[i], score) for i, score in sim_scores]
+    sim_scores = sim_scores[1:top_n+1]  # Ambil top_n rekomendasi
+    recommended = [(df['title'].iloc[i], score) for i, score in sim_scores]
+    return recommended
 
-def get_knn_recommendations(title, knn_model, df, tfidf_matrix, top_n=5):
+def get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, top_n=5):
     if title not in df['title'].values:
-        return []
+        return "Judul tidak ditemukan di dataset."
     idx = df[df['title'] == title].index[0]
     item_vector = tfidf_matrix[idx]
     distances, indices_knn = knn_model.kneighbors(item_vector, n_neighbors=top_n + 1)
     recommended_indices = indices_knn.flatten()[1:]
     distances = distances.flatten()[1:]
-    return [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
+    recommended = [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
+    return recommended
 
-def plot_similarity_comparison(recs1, recs2, title1, title2, method_name):
-    # Gabungkan kedua rekomendasi berdasar judul film
-    df1 = pd.DataFrame(recs1, columns=['title', f'similarity_{title1}'])
-    df2 = pd.DataFrame(recs2, columns=['title', f'similarity_{title2}'])
-    merged = pd.merge(df1, df2, on='title', how='outer').fillna(0)
+def measure_avg_time(func, title, runs=10):
+    times = []
+    for _ in range(runs):
+        start = time.time()
+        func(title)
+        end = time.time()
+        times.append(end - start)
+    avg_time = sum(times) / runs
+    return avg_time
 
-    plt.figure(figsize=(8,4))
-    sns.barplot(data=merged.melt(id_vars='title'), x='title', y='value', hue='variable')
-    plt.title(f'Perbandingan Skor Similarity Rekomendasi ({method_name})')
-    plt.xticks(rotation=45, ha='right')
-    plt.ylabel('Similarity Score')
-    plt.xlabel('Film Rekomendasi')
-    plt.tight_layout()
-    st.pyplot(plt.gcf())
-    plt.clf()
-
-st.title("Perbandingan Rekomendasi Film untuk Dua Pilihan Film")
+st.title("Sistem Rekomendasi Film Netflix")
 
 df = load_data_from_drive()
 tfidf_matrix = create_tfidf_matrix(df)
-cosine_sim = cosine_similarity(tfidf_matrix)
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+knn_model = create_knn_model(tfidf_matrix)
 
-knn_model = create_knn_model()
-knn_model.fit(tfidf_matrix)
+title = st.selectbox("Pilih judul film untuk direkomendasikan:", options=df['title'].sort_values().unique())
 
-title1 = st.selectbox("Pilih film pertama:", options=df['title'].sort_values().unique(), key='title1')
-title2 = st.selectbox("Pilih film kedua:", options=df['title'].sort_values().unique(), key='title2')
+if title:
+    with st.spinner("Menghitung rekomendasi..."):
+        avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_sim, df, top_n=1), title)
+        avg_time_knn = measure_avg_time(lambda t=title: get_knn_recommendations_with_scores(t, knn_model, df, tfidf_matrix, top_n=1), title)
 
-if title1 and title2:
-    if title1 == title2:
-        st.warning("Silakan pilih dua film yang berbeda untuk dibandingkan.")
-    else:
-        cosine_recs1 = get_content_based_recommendations(title1, cosine_sim, df)
-        cosine_recs2 = get_content_based_recommendations(title2, cosine_sim, df)
-        
-        knn_recs1 = get_knn_recommendations(title1, knn_model, df, tfidf_matrix)
-        knn_recs2 = get_knn_recommendations(title2, knn_model, df, tfidf_matrix)
+        st.write(f"Rata-rata waktu eksekusi Cosine Similarity (1 rekomendasi): **{avg_time_cosine:.5f} detik**")
+        st.write(f"Rata-rata waktu eksekusi KNN (1 rekomendasi): **{avg_time_knn:.5f} detik**")
 
-        col1, col2 = st.columns(2)
+        # Ambil 1 rekomendasi saja dari masing-masing metode
+        cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df, top_n=1)
+        knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, top_n=1)
 
-        with col1:
-            st.subheader(f"Rekomendasi Cosine Similarity untuk '{title1}':")
-            for t, s in cosine_recs1:
-                st.write(f"- {t} (similarity: {s:.4f})")
+        st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk '{title}':")
+        for rec_title, score in cosine_recs:
+            st.write(f"- {rec_title} (similarity: {score:.4f})")
 
-            st.subheader(f"Rekomendasi KNN untuk '{title1}':")
-            for t, s in knn_recs1:
-                st.write(f"- {t} (similarity: {s:.4f})")
+        st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title}':")
+        for rec_title, score in knn_recs:
+            st.write(f"- {rec_title} (similarity: {score:.4f})")
 
-        with col2:
-            st.subheader(f"Rekomendasi Cosine Similarity untuk '{title2}':")
-            for t, s in cosine_recs2:
-                st.write(f"- {t} (similarity: {s:.4f})")
+    st.markdown("""
+    ---
+    ### Perbandingan Metode Rekomendasi
 
-            st.subheader(f"Rekomendasi KNN untuk '{title2}':")
-            for t, s in knn_recs2:
-                st.write(f"- {t} (similarity: {s:.4f})")
+    Kedua metode menggunakan data dan film input yang sama, namun berbeda dalam cara pengukuran dan efisiensi:
 
-        st.subheader("Film yang direkomendasikan oleh kedua film (Cosine Similarity):")
-        common_cosine = set([t for t, _ in cosine_recs1]) & set([t for t, _ in cosine_recs2])
-        if common_cosine:
-            for film in common_cosine:
-                st.write(f"- {film}")
-        else:
-            st.write("Tidak ada rekomendasi yang sama untuk Cosine Similarity.")
+    - **Cosine Similarity** menghitung skor kesamaan secara global antara semua film. Ini memberi gambaran menyeluruh, namun bisa lambat jika data sangat besar.
 
-        st.subheader("Film yang direkomendasikan oleh kedua film (KNN):")
-        common_knn = set([t for t, _ in knn_recs1]) & set([t for t, _ in knn_recs2])
-        if common_knn:
-            for film in common_knn:
-                st.write(f"- {film}")
-        else:
-            st.write("Tidak ada rekomendasi yang sama untuk KNN.")
+    - **K-Nearest Neighbors (KNN)** fokus pada pencarian tetangga terdekat untuk film yang dipilih. Ini lebih efisien untuk aplikasi real-time dan dataset besar.
 
-        # Visualisasi perbandingan skor similarity
-        plot_similarity_comparison(cosine_recs1, cosine_recs2, title1, title2, "Cosine Similarity")
-        plot_similarity_comparison(knn_recs1, knn_recs2, title1, title2, "KNN")
-
-        # Kelebihan masing-masing metode
-        st.subheader("Kelebihan Metode Cosine Similarity")
-        st.write("""
-        - Menghitung kesamaan secara langsung menggunakan representasi vektor TF-IDF.
-        - Cepat dan efisien untuk dataset dengan fitur teks.
-        - Memberikan skor similarity yang mudah diinterpretasikan (nilai antara 0 dan 1).
-        - Lebih sederhana, cocok untuk konten dengan teks kaya seperti deskripsi film.
-        """)
-
-        st.subheader("Kelebihan Metode KNN")
-        st.write("""
-        - Menggunakan algoritma yang lebih fleksibel, dapat digunakan untuk berbagai jenis data.
-        - Memperhitungkan jarak tetangga terdekat secara eksplisit.
-        - Cocok untuk dataset dengan ukuran besar jika dioptimalkan.
-        - Mudah untuk dikembangkan ke metode lain seperti k-means clustering atau rekomendasi berbasis pengguna.
-        """)
-
+    Hasil rekomendasi keduanya biasanya mirip, namun KNN lebih scalable dan praktis untuk sistem rekomendasi.
+    """)
