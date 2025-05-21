@@ -8,11 +8,10 @@ from sklearn.neighbors import NearestNeighbors
 from numpy import log1p
 import difflib
 
-# Masukkan langsung API key OMDb di sini
-api_key = "f12fcdec"  # Ganti dengan API key milikmu
-
+# Masukkan API key langsung (hanya untuk lokal/testing)
+api_key = "f12fcdec"  # Ganti dengan API key OMDb kamu
 if not api_key:
-    st.error("API key tidak tersedia. Masukkan API key secara langsung di variabel 'api_key'.")
+    st.error("API key tidak ditemukan. Pastikan sudah diatur.")
     st.stop()
 
 # Load dataset dari Google Drive
@@ -22,11 +21,9 @@ def load_data():
     try:
         df = pd.read_csv(csv_url)
 
-        # Bersihkan votes dan rating
         df['votes'] = df['votes'].fillna('0').str.replace(',', '', regex=False).astype(int)
         df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
 
-        # Pembersihan teks
         def clean_text(text):
             text = str(text).lower()
             text = re.sub(r'[^a-z0-9\s]', ' ', text)
@@ -36,7 +33,6 @@ def load_data():
         for col in ['genre', 'description', 'stars']:
             df[col] = df[col].fillna('').apply(clean_text)
 
-        # Gabungkan fitur
         df['combined_features'] = (
             (df['genre'] + ' ') * 2 +
             (df['stars'] + ' ') * 2 +
@@ -47,7 +43,6 @@ def load_data():
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame()
 
-# Siapkan model TF-IDF dan KNN
 @st.cache_resource
 def prepare_model(df):
     vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=10000)
@@ -58,21 +53,19 @@ def prepare_model(df):
 
     return vectorizer, tfidf_matrix, knn
 
-# Fungsi dapatkan poster dari OMDb API
+# 🔁 Perbarui fungsi ini
 def get_movie_poster(title):
-    url = f"http://www.omdbapi.com/?apikey={api_key}&t={title}"
+    url = f"http://www.omdbapi.com/?apikey={api_key}&s={title}"
     try:
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            poster_url = data.get("Poster", None)
-            if poster_url and poster_url != "N/A":
-                return poster_url
-    except:
-        pass
+            if data.get("Search"):
+                return data["Search"][0].get("Poster", None)
+    except Exception as e:
+        print(f"Error fetching poster: {e}")
     return None
 
-# Fungsi rekomendasi
 def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
     idx_list = df.index[df['title'].str.lower() == title.lower()]
     if len(idx_list) == 0:
@@ -99,13 +92,13 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
         if rating >= min_rating and votes >= min_votes:
             score = (similarity * 0.5) + (rating / 10 * 0.3) + (log1p(votes) / 10 * 0.2)
             recommendations.append((
-                rec_title,                                  # Title
-                df.iloc[rec_idx]['genre'],                  # Genre
-                round(similarity, 3),                        # Similarity
-                rating,                                     # Rating
-                round(score, 4),                            # Score
-                df.iloc[rec_idx]['description'][:150] + '...',  # Description
-                f"{votes:,}"                                # Votes formatted
+                rec_title,
+                df.iloc[rec_idx]['genre'],
+                round(similarity, 3),
+                rating,
+                round(score, 4),
+                df.iloc[rec_idx]['description'][:150] + '...',
+                f"{votes:,}"
             ))
             added_titles.add(rec_title.lower())
 
@@ -142,10 +135,8 @@ if not df.empty:
         else:
             st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
 
-            # Tampilkan dataframe hasil rekomendasi
             st.dataframe(hasil.style.highlight_max(axis=0, subset=['Score']), use_container_width=True)
 
-            # Visualisasi poster film max 5 rekomendasi
             st.markdown("### Poster Film Rekomendasi:")
             cols = st.columns(min(len(hasil), 5))
 
