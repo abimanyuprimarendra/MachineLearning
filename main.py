@@ -8,10 +8,11 @@ from sklearn.neighbors import NearestNeighbors
 from numpy import log1p
 import difflib
 
-# Ambil API key dari environment variable
-api_key = os.getenv("OMDB_API_KEY")
+# Masukkan langsung API key OMDb di sini
+api_key = "12345678"  # Ganti dengan API key milikmu
+
 if not api_key:
-    st.error("API key tidak ditemukan. Pastikan sudah diatur di environment variable OMDB_API_KEY.")
+    st.error("API key tidak tersedia. Masukkan API key secara langsung di variabel 'api_key'.")
     st.stop()
 
 # Load dataset dari Google Drive
@@ -116,47 +117,4 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
 
     recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
     df_result = pd.DataFrame(recommendations, columns=[
-        'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes'
-    ])
-    return None, df_result
-
-
-# =======================
-# Streamlit App
-# =======================
-st.title("🎬 Sistem Rekomendasi Film dengan Poster")
-
-df = load_data()
-if not df.empty:
-    vectorizer, tfidf_matrix, knn = prepare_model(df)
-
-    title_input = st.text_input("Masukkan judul film", "Cobra Kai")
-    n = st.slider("Jumlah rekomendasi", 1, 20, 5)
-    min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
-    min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
-
-    if st.button("Rekomendasikan"):
-        error_msg, hasil = recommend(title_input, n, min_rating, min_votes)
-        if error_msg:
-            st.warning(error_msg)
-        else:
-            st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
-
-            # Tampilkan dataframe hasil rekomendasi
-            st.dataframe(hasil.style.highlight_max(axis=0, subset=['Score']), use_container_width=True)
-
-            # Visualisasi poster film max 5 rekomendasi
-            st.markdown("### Poster Film Rekomendasi:")
-            cols = st.columns(min(len(hasil), 5))
-
-            for idx, col in enumerate(cols):
-                title_rec = hasil.iloc[idx]['Title']
-                poster_url = get_movie_poster(title_rec)
-                with col:
-                    st.markdown(f"**{title_rec}**")
-                    if poster_url:
-                        st.image(poster_url, use_column_width=True)
-                    else:
-                        st.write("Poster tidak tersedia.")
-else:
-    st.stop()
+        'Title', 'Genre', 'Simil
