@@ -9,7 +9,7 @@ from sklearn.neighbors import NearestNeighbors
 # 1. Load dataset dari Google Drive
 @st.cache_data
 def load_data_from_drive():
-    csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
+    csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     df = pd.read_csv(csv_url)
     features = ['title', 'listed_in'] + (['description'] if 'description' in df.columns else [])
     df[features] = df[features].fillna('')
