@@ -9,14 +9,22 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 from nltk.stem import WordNetLemmatizer
 
-# Download NLTK data (jalankan sekali saja)
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
+# Fungsi untuk memastikan resource NLTK sudah ada (jalan sekali saja)
+def download_nltk_resources():
+    try:
+        nltk.data.find('tokenizers/punkt')
+        nltk.data.find('corpora/stopwords')
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('punkt')
+        nltk.download('stopwords')
+        nltk.download('wordnet')
 
-# Preprocessing function
+download_nltk_resources()
+
 lemmatizer = WordNetLemmatizer()
 
+# Fungsi preprocess tanpa caching (karena menggunakan objek non-hashable)
 def preprocess_text_lemmatize(text):
     text = re.sub('[^a-zA-Z]', ' ', str(text))
     text = text.lower()
@@ -27,16 +35,19 @@ def preprocess_text_lemmatize(text):
     lemmatized_tokens = [lemmatizer.lemmatize(t) for t in filtered_tokens]
     return ' '.join(lemmatized_tokens)
 
+# Cache hanya untuk load data karena pandas DataFrame aman di-cache
 @st.cache_data(show_spinner=True)
 def load_data():
     file_path = 'https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-'
     df = pd.read_csv(file_path)
+    # Preprocessing setiap kolom tanpa caching, karena string output aman
     for col in ['director', 'country', 'listed_in']:
         df[col] = df[col].fillna('')
         df[col] = df[col].apply(preprocess_text_lemmatize)
     df['combined_features'] = df.apply(lambda row: ' '.join([row['director'], row['country'], row['listed_in']]), axis=1)
     return df
 
+# Cache buat fit vectorizer dan model, inputnya DataFrame yang aman di-hash
 @st.cache_data(show_spinner=True)
 def create_tfidf_cosine_knn(df):
     tfidf = TfidfVectorizer(stop_words='english')
@@ -57,7 +68,6 @@ def get_recommendations(title, cosine_sim, df, n_neighbors=5):
     movie_indices = [i[0] for i in sim_scores]
     return df.iloc[movie_indices][['title', 'director', 'release_year', 'rating']]
 
-# Streamlit App UI
 def main():
     st.title("Sistem Rekomendasi Film Netflix (Content-Based Filtering)")
     df = load_data()
