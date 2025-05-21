@@ -1,4 +1,3 @@
-
 name: Deploy Streamlit App
 
 on:
@@ -26,6 +25,5 @@ jobs:
       - name: Run Streamlit App
         run: streamlit run main.py
         
-     - name: Debug print env variable
-       run: echo "OMDB_API_KEY is $OMDB_API_KEY"
-
+      - name: Debug print env variable
+        run: echo "OMDB_API_KEY is $OMDB_API_KEY"
