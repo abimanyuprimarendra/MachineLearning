@@ -126,17 +126,25 @@ if not df.empty:
             # Bagian visualisasi tetap sama...
             st.markdown("## 🎥 Rekomendasi Visual")
             top5 = hasil.head(5)
-            for _, row in top5.iterrows():
-                st.markdown(f"### 🎬 {row['Title']}")
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    st.text("Poster tidak tersedia")  # sesuai permintaan tanpa poster
-                with col2:
-                    st.markdown(f"**Genre:** {row['Genre']}")
-                    st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
-                    st.markdown(f"**Score:** {row['Score']}")
-                    st.markdown(f"**Deskripsi:** {row['Description']}")
-                st.markdown("---")
+           for _, row in top5.iterrows():
+    st.markdown(f"### 🎬 {row['Title']}")
+    if row['Poster']:
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            st.image(row['Poster'], width=120)
+        with col2:
+            st.markdown(f"**Genre:** {row['Genre']}")
+            st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
+            st.markdown(f"**Score:** {row['Score']}")
+            st.markdown(f"**Deskripsi:** {row['Description']}")
+    else:
+        # Poster kosong, tampilkan detail full lebar tanpa kolom poster
+        st.markdown(f"**Genre:** {row['Genre']}")
+        st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
+        st.markdown(f"**Score:** {row['Score']}")
+        st.markdown(f"**Deskripsi:** {row['Description']}")
+    st.markdown("---")
+
 
             # Visualisasi grafik
             st.subheader("📊 Visualisasi Data Rekomendasi")
