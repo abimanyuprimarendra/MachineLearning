@@ -9,7 +9,7 @@ from numpy import log1p
 import difflib
 
 # Ambil API key dari environment variable
-api_key = os.getenv("STREAMLIT_OMDB_API_KEY")
+api_key = os.getenv("OMDB_API_KEY")
 if not api_key:
     st.error("API key tidak ditemukan. Pastikan sudah diatur di environment variable STREAMLIT_OMDB_API_KEY.")
     st.stop()
