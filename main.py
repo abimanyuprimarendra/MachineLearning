@@ -14,20 +14,21 @@ def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
-    data['description'] = data['description'].fillna('')
-    # Gabungkan kolom untuk content-based recommendation
-    data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
+    # Kolom description tidak ada, jadi tidak dipakai
+    data['combined'] = data['title'] + " " + data['listed_in']
     return data
 
-@st.cache_resource(show_spinner=False)
-def create_tfidf_and_knn(df):
+@st.cache_data(show_spinner=False)
+def create_tfidf_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['combined'])
+    return tfidf_matrix
 
+@st.cache_resource(show_spinner=False)
+def create_knn_model(tfidf_matrix):
     knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
     knn_model.fit(tfidf_matrix)
-
-    return tfidf_matrix, knn_model
+    return knn_model
 
 def get_content_based_recommendations_with_scores(title, cosine_sim, df, top_n=5):
     if title not in df['title'].values:
@@ -73,14 +74,11 @@ def plot_similarity_bar_chart(recommendations, method_name):
 
 st.title("Sistem Rekomendasi Film Netflix")
 
-# Load data
+# Load data dan buat tfidf matrix
 df = load_data_from_drive()
-
-# Buat tfidf matrix dan model knn sekaligus agar cache tidak error
-tfidf_matrix, knn_model = create_tfidf_and_knn(df)
-
-# Hitung cosine similarity (tidak perlu cache karena ringan)
-cosine_sim = cosine_similarity(tfidf_matrix)
+tfidf_matrix = create_tfidf_matrix(df)
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+knn_model = create_knn_model(tfidf_matrix)
 
 # Pilihan film dari dataset
 title = st.selectbox("Pilih judul film untuk direkomendasikan:", options=df['title'].sort_values().unique())
@@ -104,7 +102,7 @@ if title:
         for rec_title, score in knn_recs:
             st.write(f"- {rec_title} (similarity: {score:.4f})")
 
-        # Visualisasi bar chart
+        # Tambahkan visualisasi bar chart
         st.subheader(f"Visualisasi Similarity Scores berdasarkan Cosine Similarity:")
         plot_similarity_bar_chart(cosine_recs, "Cosine Similarity")
 
