@@ -29,7 +29,7 @@ def preprocess_text_lemmatize(text):
 
 @st.cache_data(show_spinner=True)
 def load_data():
-    file_path = '/content/drive/MyDrive/Semester 6/Machine Learning 2025/Netflix.csv'
+    file_path = 'https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-'
     df = pd.read_csv(file_path)
     for col in ['director', 'country', 'listed_in']:
         df[col] = df[col].fillna('')
