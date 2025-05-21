@@ -23,10 +23,9 @@ def create_tfidf_matrix(df):
     return tfidf_matrix
 
 @st.cache_resource
-def create_knn_model(tfidf_matrix):
-    knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
-    knn_model.fit(tfidf_matrix)
-    return knn_model
+def create_knn_model():
+    # Hanya membuat instance, fit dilakukan terpisah
+    return NearestNeighbors(metric='cosine', algorithm='brute')
 
 def get_content_based_recommendations(title, cosine_sim, df, top_n=5):
     if title not in df['title'].values:
@@ -53,7 +52,9 @@ st.title("Perbandingan Rekomendasi Film: KNN vs Cosine Similarity")
 df = load_data_from_drive()
 tfidf_matrix = create_tfidf_matrix(df)
 cosine_sim = cosine_similarity(tfidf_matrix)
-knn_model = create_knn_model(tfidf_matrix)
+
+knn_model = create_knn_model()
+knn_model.fit(tfidf_matrix)  # Fitting model dilakukan di sini
 
 title = st.selectbox("Pilih judul film:", options=df['title'].sort_values().unique())
 
@@ -73,7 +74,7 @@ if title:
         for i, (rec_title, score) in enumerate(knn_recs, 1):
             st.write(f"{i}. {rec_title} (similarity: {score:.4f})")
 
-    # Tampilkan visualisasi
+    # Visualisasi perbandingan skor similarity
     st.subheader("Visualisasi Perbandingan Skor Similarity")
     combined_data = pd.DataFrame({
         'Film': [rec[0] for rec in cosine_recs] + [rec[0] for rec in knn_recs],
@@ -85,7 +86,7 @@ if title:
     sns.barplot(data=combined_data, x='Similarity', y='Film', hue='Metode')
     st.pyplot(plt.gcf())
 
-    # Tampilkan irisan rekomendasi yang sama
+    # Film yang direkomendasikan oleh keduanya
     st.subheader("Film yang Direkomendasikan oleh Keduanya")
     cosine_titles = set([title for title, _ in cosine_recs])
     knn_titles = set([title for title, _ in knn_recs])
