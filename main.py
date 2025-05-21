@@ -1,84 +1,80 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import heapq
-import time
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
+from nltk.stem import WordNetLemmatizer
 
-@st.cache_data(show_spinner=False)
+# Download NLTK data (jalankan sekali saja)
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+# Preprocessing function
+lemmatizer = WordNetLemmatizer()
+
+def preprocess_text_lemmatize(text):
+    text = re.sub('[^a-zA-Z]', ' ', str(text))
+    text = text.lower()
+    tokens = word_tokenize(text)
+    tokens = [t for t in tokens if len(t) > 2]
+    stop_words = set(stopwords.words('english'))
+    filtered_tokens = [t for t in tokens if t not in stop_words]
+    lemmatized_tokens = [lemmatizer.lemmatize(t) for t in filtered_tokens]
+    return ' '.join(lemmatized_tokens)
+
+@st.cache_data(show_spinner=True)
 def load_data():
     file_path = '/content/drive/MyDrive/Semester 6/Machine Learning 2025/Netflix.csv'
     df = pd.read_csv(file_path)
-    features = ['title', 'listed_in'] + (['description'] if 'description' in df.columns else [])
-    df[features] = df[features].fillna('')
-    df['combined'] = df[features].agg(' '.join, axis=1)
+    for col in ['director', 'country', 'listed_in']:
+        df[col] = df[col].fillna('')
+        df[col] = df[col].apply(preprocess_text_lemmatize)
+    df['combined_features'] = df.apply(lambda row: ' '.join([row['director'], row['country'], row['listed_in']]), axis=1)
     return df
 
-@st.cache_data(show_spinner=False)
-def build_tfidf_and_knn(df):
+@st.cache_data(show_spinner=True)
+def create_tfidf_cosine_knn(df):
     tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['combined']).astype(np.float32)
-    knn_model = NearestNeighbors(metric='cosine', algorithm='brute', n_jobs=-1)
-    knn_model.fit(tfidf_matrix)
-    return tfidf_matrix, knn_model
+    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
+    cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+    knn = NearestNeighbors(metric='cosine', algorithm='brute')
+    knn.fit(tfidf_matrix)
+    return tfidf, tfidf_matrix, cosine_sim, knn
 
-df = load_data()
-tfidf_matrix, knn_model = build_tfidf_and_knn(df)
-
-indices = pd.Series(df.index, index=df['title']).drop_duplicates()
-
-def get_content_based_recommendations(title, num_recommendations=10):
+def get_recommendations(title, cosine_sim, df, n_neighbors=5):
+    indices = pd.Series(df.index, index=df['title']).drop_duplicates()
     if title not in indices:
-        return "Judul tidak ditemukan di dataset."
+        return None
     idx = indices[title]
-    cosine_sim_row = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten().astype(np.float32)
-    sim_scores = list(enumerate(cosine_sim_row))
-    top_sim_scores = heapq.nlargest(num_recommendations + 1, sim_scores, key=lambda x: x[1])
-    top_sim_scores = [item for item in top_sim_scores if item[0] != idx][:num_recommendations]
-    recommended = [f"{df['title'].iloc[i]} (cosine similarity: {score:.4f})" for i, score in top_sim_scores]
-    return recommended
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    sim_scores = sim_scores[1:n_neighbors+1]
+    movie_indices = [i[0] for i in sim_scores]
+    return df.iloc[movie_indices][['title', 'director', 'release_year', 'rating']]
 
-def get_knn_recommendations(title, num_recommendations=10):
-    if title not in indices:
-        return "Judul tidak ditemukan di dataset."
-    idx = indices[title]
-    distances, neighbors = knn_model.kneighbors(tfidf_matrix[idx], n_neighbors=num_recommendations + 1)
-    distances = distances.flatten()[1:]
-    neighbors = neighbors.flatten()[1:]
-    recommended = []
-    for i, dist in zip(neighbors, distances):
-        similarity = 1 - dist
-        recommended.append(f"{df['title'].iloc[i]} (similarity: {similarity:.4f})")
-    return recommended
+# Streamlit App UI
+def main():
+    st.title("Sistem Rekomendasi Film Netflix (Content-Based Filtering)")
+    df = load_data()
+    tfidf, tfidf_matrix, cosine_sim, knn = create_tfidf_cosine_knn(df)
 
-st.title("Rekomendasi Film Netflix")
+    movie_list = df['title'].tolist()
+    selected_movie = st.selectbox("Pilih film untuk direkomendasikan:", movie_list)
 
-title_input = st.text_input("Masukkan judul film:", "Dick Johnson Is Dead")
-num_recs = st.slider("Jumlah rekomendasi:", 1, 20, 10)
+    n_neighbors = st.slider("Jumlah rekomendasi yang diinginkan:", 3, 10, 5)
 
-if title_input:
-    start = time.time()
-    content_recs = get_content_based_recommendations(title_input, num_recs)
-    end = time.time()
-    st.write(f"Waktu eksekusi Content-Based (Cosine Similarity): {end - start:.5f} detik")
+    if st.button("Cari Rekomendasi"):
+        recommendations = get_recommendations(selected_movie, cosine_sim, df, n_neighbors)
+        if recommendations is not None:
+            st.subheader(f"Rekomendasi film mirip dengan '{selected_movie}':")
+            st.dataframe(recommendations.reset_index(drop=True))
+        else:
+            st.error("Judul film tidak ditemukan di dataset.")
 
-    start = time.time()
-    knn_recs = get_knn_recommendations(title_input, num_recs)
-    end = time.time()
-    st.write(f"Waktu eksekusi KNN: {end - start:.5f} detik")
-
-    st.subheader(f"Rekomendasi berdasarkan Content-Based untuk '{title_input}':")
-    if isinstance(content_recs, list):
-        for rec in content_recs:
-            st.write(rec)
-    else:
-        st.write(content_recs)
-
-    st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title_input}':")
-    if isinstance(knn_recs, list):
-        for rec in knn_recs:
-            st.write(rec)
-    else:
-        st.write(knn_recs)
+if __name__ == '__main__':
+    main()
