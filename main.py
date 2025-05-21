@@ -1,18 +1,11 @@
 import streamlit as st
 import pandas as pd
 import re
-import os
-import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 from numpy import log1p
 import difflib
-
-# Masukkan API key langsung (hanya untuk lokal/testing)
-api_key = "f12fcdec"  # Ganti dengan API key OMDb kamu
-if not api_key:
-    st.error("API key tidak ditemukan. Pastikan sudah diatur.")
-    st.stop()
+import plotly.express as px
 
 # Load dataset dari Google Drive
 @st.cache_data
@@ -43,6 +36,7 @@ def load_data():
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame()
 
+# Siapkan model TF-IDF dan KNN
 @st.cache_resource
 def prepare_model(df):
     vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=10000)
@@ -53,19 +47,7 @@ def prepare_model(df):
 
     return vectorizer, tfidf_matrix, knn
 
-# 🔁 Perbarui fungsi ini
-def get_movie_poster(title):
-    url = f"http://www.omdbapi.com/?apikey={api_key}&s={title}"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("Search"):
-                return data["Search"][0].get("Poster", None)
-    except Exception as e:
-        print(f"Error fetching poster: {e}")
-    return None
-
+# Fungsi rekomendasi
 def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
     idx_list = df.index[df['title'].str.lower() == title.lower()]
     if len(idx_list) == 0:
@@ -117,14 +99,14 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
 # =======================
 # Streamlit App
 # =======================
-st.title("🎬 Sistem Rekomendasi Film dengan Poster")
+st.title("🎬 Sistem Rekomendasi Film")
 
 df = load_data()
 if not df.empty:
     vectorizer, tfidf_matrix, knn = prepare_model(df)
 
     title_input = st.text_input("Masukkan judul film", "Cobra Kai")
-    n = st.slider("Jumlah rekomendasi", 1, 20, 5)
+    n = st.slider("Jumlah rekomendasi", 1, 20, 10)
     min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
     min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
 
@@ -135,19 +117,57 @@ if not df.empty:
         else:
             st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
 
+            # 🔳 VISUALISASI 5 TERATAS TANPA GAMBAR POSTER
+            st.markdown("## 🎥 Rekomendasi Visual")
+            top5 = hasil.head(5)
+            for _, row in top5.iterrows():
+                st.markdown(f"### 🎬 {row['Title']}")
+                st.markdown(f"**Genre:** {row['Genre']}")
+                st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
+                st.markdown(f"**Score:** {row['Score']}")
+                st.markdown(f"**Deskripsi:** {row['Description']}")
+                st.markdown("---")
+
+            # 🔍 VISUALISASI GRAFIK
+            st.subheader("📊 Visualisasi Data Rekomendasi")
+
+            fig_score = px.bar(
+                top5,
+                x='Title',
+                y='Score',
+                color='Score',
+                color_continuous_scale='viridis',
+                title='🔢 Skor Rekomendasi Film',
+                labels={'Score': 'Skor', 'Title': 'Judul'}
+            )
+            st.plotly_chart(fig_score, use_container_width=True)
+
+            fig_scatter = px.scatter(
+                top5,
+                x='Similarity',
+                y='Rating',
+                text='Title',
+                size='Score',
+                color='Score',
+                title='🎯 Similarity vs Rating',
+                labels={'Similarity': 'Kemiripan', 'Rating': 'Rating'}
+            )
+            fig_scatter.update_traces(textposition='top center')
+            st.plotly_chart(fig_scatter, use_container_width=True)
+
+            if top5['Genre'].nunique() > 1:
+                genre_counts = top5['Genre'].value_counts().reset_index()
+                genre_counts.columns = ['Genre', 'Count']
+                fig_pie = px.pie(
+                    genre_counts,
+                    names='Genre',
+                    values='Count',
+                    title='📊 Genre Film yang Direkomendasikan'
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            # Tabel Data
+            st.markdown("## 📋 Tabel Data")
             st.dataframe(hasil.style.highlight_max(axis=0, subset=['Score']), use_container_width=True)
-
-            st.markdown("### Poster Film Rekomendasi:")
-            cols = st.columns(min(len(hasil), 5))
-
-            for idx, col in enumerate(cols):
-                title_rec = hasil.iloc[idx]['Title']
-                poster_url = get_movie_poster(title_rec)
-                with col:
-                    st.markdown(f"**{title_rec}**")
-                    if poster_url:
-                        st.image(poster_url, use_column_width=True)
-                    else:
-                        st.write("Poster tidak tersedia.")
 else:
     st.stop()
