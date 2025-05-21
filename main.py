@@ -9,9 +9,13 @@ import os
 # Load dari Google Drive menggunakan gdown atau requests
 @st.cache_data
 def load_data_from_drive():
+    import os
+    import pandas as pd
     file_id = "1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     url = f"https://drive.google.com/uc?id={file_id}"
     output = "netflix_data.csv"
+
+    data = None
 
     try:
         import gdown
@@ -19,20 +23,34 @@ def load_data_from_drive():
             gdown.download(url, output, quiet=False)
         data = pd.read_csv(output)
     except Exception as e:
-        # Fallback jika gdown gagal (misal di environment cloud)
-        from io import BytesIO
-        import requests
-        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        response = requests.get(download_url)
-        if response.status_code != 200:
-            st.error("Gagal mengunduh data dari Google Drive.")
-            return None
-        data = pd.read_csv(BytesIO(response.content))
+        try:
+            # fallback via requests
+            from io import BytesIO
+            import requests
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            response = requests.get(download_url)
+            if response.status_code == 200:
+                data = pd.read_csv(BytesIO(response.content))
+        except:
+            pass
 
-    # Preprocessing
+    if data is None or not isinstance(data, pd.DataFrame):
+        st.error("❌ Gagal memuat data. Periksa URL Google Drive dan koneksi internet.")
+        return pd.DataFrame(columns=["title", "listed_in", "description", "combined"])
+
+    # Periksa kolom penting
+    for col in ['title', 'listed_in', 'description']:
+        if col not in data.columns:
+            data[col] = ""
+
+    # Bersihkan missing value
     data['listed_in'] = data['listed_in'].fillna('')
-    data['description'] = data.get('description', '').fillna('')
+    data['description'] = data['description'].fillna('')
+    data['title'] = data['title'].fillna('')
+
+    # Gabungkan
     data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
+
     return data
 
 # Inisialisasi model
