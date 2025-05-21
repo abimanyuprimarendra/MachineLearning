@@ -9,7 +9,7 @@ from numpy import log1p
 import difflib
 
 # Masukkan langsung API key OMDb di sini
-api_key = "12345678"  # Ganti dengan API key milikmu
+api_key = "f12fcdec"  # Ganti dengan API key milikmu
 
 if not api_key:
     st.error("API key tidak tersedia. Masukkan API key secara langsung di variabel 'api_key'.")
