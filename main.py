@@ -7,6 +7,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
+# Fungsi load data dari Google Drive dengan caching agar efisien
 @st.cache_data
 def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
@@ -16,37 +17,55 @@ def load_data_from_drive():
     data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
     return data
 
+# Membuat matriks TF-IDF dari gabungan kolom teks
 @st.cache_data
 def create_tfidf_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['combined'])
     return tfidf_matrix
 
+# Membuat model KNN dengan metric 'cosine'
 @st.cache_resource
 def create_knn_model():
-    # Hanya membuat instance, fit dilakukan terpisah
+    # Metric 'cosine' artinya menggunakan jarak cosine (bukan similarity langsung)
+    # NearestNeighbors mencari tetangga terdekat berdasarkan jarak ini
     return NearestNeighbors(metric='cosine', algorithm='brute')
 
+# Fungsi rekomendasi berbasis cosine similarity full matrix
 def get_content_based_recommendations(title, cosine_sim, df, top_n=5):
+    """
+    Cosine Similarity:
+    Mengukur kemiripan dua vektor teks (film) dengan rumus:
+    cosine_sim(A, B) = (A dot B) / (||A|| * ||B||)
+    Menghasilkan nilai antara 0 (tidak mirip) sampai 1 (identik).
+    """
     if title not in df['title'].values:
         return []
     idx = df[df['title'] == title].index[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:top_n+1]
+    sim_scores = sim_scores[1:top_n+1]  # Ambil top N selain diri sendiri
     return [(df['title'].iloc[i], score) for i, score in sim_scores]
 
+# Fungsi rekomendasi berbasis KNN dengan jarak cosine
 def get_knn_recommendations(title, knn_model, df, tfidf_matrix, top_n=5):
+    """
+    KNN dengan metric 'cosine' menghitung jarak cosine:
+    distance = 1 - cosine_similarity
+    Model mencari tetangga terdekat berdasarkan jarak ini.
+    Skor similarity dikembalikan dengan membalik jarak:
+    similarity = 1 - distance
+    """
     if title not in df['title'].values:
         return []
     idx = df[df['title'] == title].index[0]
     item_vector = tfidf_matrix[idx]
     distances, indices_knn = knn_model.kneighbors(item_vector, n_neighbors=top_n + 1)
-    recommended_indices = indices_knn.flatten()[1:]
+    recommended_indices = indices_knn.flatten()[1:]  # Kecuali diri sendiri
     distances = distances.flatten()[1:]
     return [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
 
-# Streamlit UI
+# Streamlit UI utama
 st.title("Perbandingan Rekomendasi Film: KNN vs Cosine Similarity")
 
 df = load_data_from_drive()
@@ -54,7 +73,7 @@ tfidf_matrix = create_tfidf_matrix(df)
 cosine_sim = cosine_similarity(tfidf_matrix)
 
 knn_model = create_knn_model()
-knn_model.fit(tfidf_matrix)  # Fitting model dilakukan di sini
+knn_model.fit(tfidf_matrix)  # Fit model sekali saja
 
 title = st.selectbox("Pilih judul film:", options=df['title'].sort_values().unique())
 
@@ -62,7 +81,7 @@ if title:
     cosine_recs = get_content_based_recommendations(title, cosine_sim, df)
     knn_recs = get_knn_recommendations(title, knn_model, df, tfidf_matrix)
 
-    # Tampilkan tabel berdampingan
+    # Tampilkan rekomendasi berdampingan
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Cosine Similarity")
@@ -82,11 +101,13 @@ if title:
         'Metode': ['Cosine'] * len(cosine_recs) + ['KNN'] * len(knn_recs)
     })
 
+    import matplotlib.pyplot as plt
+    import seaborn as sns
     plt.figure(figsize=(10, 5))
     sns.barplot(data=combined_data, x='Similarity', y='Film', hue='Metode')
     st.pyplot(plt.gcf())
 
-    # Film yang direkomendasikan oleh keduanya
+    # Tampilkan film yang direkomendasikan oleh kedua metode
     st.subheader("Film yang Direkomendasikan oleh Keduanya")
     cosine_titles = set([title for title, _ in cosine_recs])
     knn_titles = set([title for title, _ in knn_recs])
