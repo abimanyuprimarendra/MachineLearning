@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import time
+import matplotlib.pyplot as plt
+from matplotlib_venn import venn2
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
@@ -35,11 +37,11 @@ def get_content_based_recommendations_with_scores(title, cosine_sim, df):
     idx = df[df['title'] == title].index[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:11]
+    sim_scores = sim_scores[1:6]  # Ambil 5 teratas
     recommended = [(df['title'].iloc[i], score) for i, score in sim_scores]
     return recommended
 
-def get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, n_neighbors=10):
+def get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, n_neighbors=5):
     if title not in df['title'].values:
         return "Judul tidak ditemukan di dataset."
     idx = df[df['title'] == title].index[0]
@@ -60,7 +62,7 @@ def measure_avg_time(func, title, runs=10):
     avg_time = sum(times) / runs
     return avg_time
 
-st.title("Sistem Rekomendasi Film Netflix")
+st.title("🎬 Sistem Rekomendasi Film Netflix")
 
 df = load_data_from_drive()
 tfidf_matrix = create_tfidf_matrix(df)
@@ -74,16 +76,39 @@ if title:
         avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_sim, df), title)
         avg_time_knn = measure_avg_time(lambda t=title: get_knn_recommendations_with_scores(t, knn_model, df, tfidf_matrix), title)
 
-        st.write(f"Rata-rata waktu eksekusi Cosine Similarity: **{avg_time_cosine:.5f} detik**")
-        st.write(f"Rata-rata waktu eksekusi KNN: **{avg_time_knn:.5f} detik**")
+        st.write(f"⏱️ Rata-rata waktu eksekusi Cosine Similarity: **{avg_time_cosine:.5f} detik**")
+        st.write(f"⏱️ Rata-rata waktu eksekusi KNN: **{avg_time_knn:.5f} detik**")
 
         cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df)
         knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix)
 
-        st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk {title}:")
+        st.subheader(f"📌 Rekomendasi berdasarkan Cosine Similarity untuk **{title}**:")
         for rec_title, score in cosine_recs:
             st.write(f"- {rec_title} (similarity: {score:.4f})")
 
-        st.subheader(f"Rekomendasi berdasarkan KNN untuk {title}:")
+        st.subheader(f"📌 Rekomendasi berdasarkan KNN untuk **{title}**:")
         for rec_title, score in knn_recs:
             st.write(f"- {rec_title} (similarity: {score:.4f})")
+
+        # --- Perbandingan hasil rekomendasi ---
+        st.subheader("📊 Perbandingan Rekomendasi")
+
+        compare_df = pd.DataFrame({
+            "Judul (Cosine Similarity)": [rec[0] for rec in cosine_recs],
+            "Skor Cosine": [rec[1] for rec in cosine_recs],
+            "Judul (KNN)": [rec[0] for rec in knn_recs],
+            "Skor KNN": [rec[1] for rec in knn_recs],
+        })
+        st.dataframe(compare_df, use_container_width=True)
+
+        # Hitung overlap
+        cosine_titles = set([rec[0] for rec in cosine_recs])
+        knn_titles = set([rec[0] for rec in knn_recs])
+        overlap_titles = cosine_titles.intersection(knn_titles)
+
+        st.markdown(f"🔁 Jumlah rekomendasi yang sama oleh kedua metode: **{len(overlap_titles)}** dari 5")
+
+        # Tampilkan Venn Diagram
+        fig, ax = plt.subplots()
+        venn2([cosine_titles, knn_titles], set_labels=('Cosine Similarity', 'KNN'))
+        st.pyplot(fig)
