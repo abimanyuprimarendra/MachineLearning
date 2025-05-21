@@ -81,7 +81,8 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
                 rating,
                 f"{votes:,}",
                 round(score, 4),
-                df.iloc[rec_idx]['description'][:150] + '...'
+                df.iloc[rec_idx]['description'][:150] + '...',
+                df.iloc[rec_idx]['genre']  # genre ditambahkan di sini
             ))
             added_titles.add(rec_title.lower())
 
@@ -93,9 +94,10 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
 
     recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
     df_result = pd.DataFrame(recommendations, columns=[
-        'Title', 'Similarity', 'Rating', 'Votes', 'Score', 'Description'
+        'Title', 'Similarity', 'Rating', 'Votes', 'Score', 'Description', 'Genre'
     ])
     return None, df_result
+
 
 # =======================
 # Streamlit App
