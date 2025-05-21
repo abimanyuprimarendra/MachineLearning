@@ -23,7 +23,7 @@ def create_tfidf_matrix(df):
     tfidf_matrix = tfidf.fit_transform(df['combined'])
     return tfidf_matrix
 
-@st.cache_resource
+# Jangan pakai cache pada fungsi ini karena menerima tfidf_matrix (sparse matrix)
 def create_knn_model(tfidf_matrix):
     knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
     knn_model.fit(tfidf_matrix)
@@ -64,20 +64,21 @@ st.title("Sistem Rekomendasi Film Netflix")
 
 df = load_data_from_drive()
 tfidf_matrix = create_tfidf_matrix(df)
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
+# Create knn_model tanpa cache agar tidak error
 knn_model = create_knn_model(tfidf_matrix)
 
 title = st.selectbox("Pilih judul film untuk direkomendasikan:", options=df['title'].sort_values().unique())
 
 if title:
     with st.spinner("Menghitung rekomendasi..."):
-        avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_sim, df, top_n=1), title)
+        avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_similarity(tfidf_matrix, tfidf_matrix), df, top_n=1), title)
         avg_time_knn = measure_avg_time(lambda t=title: get_knn_recommendations_with_scores(t, knn_model, df, tfidf_matrix, top_n=1), title)
 
         st.write(f"Rata-rata waktu eksekusi Cosine Similarity (1 rekomendasi): **{avg_time_cosine:.5f} detik**")
         st.write(f"Rata-rata waktu eksekusi KNN (1 rekomendasi): **{avg_time_knn:.5f} detik**")
 
-        # Ambil 1 rekomendasi saja dari masing-masing metode
+        cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)  # Hitung di sini agar tidak cache dan error
         cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df, top_n=1)
         knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, top_n=1)
 
