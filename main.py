@@ -105,7 +105,13 @@ df = load_data()
 if not df.empty:
     vectorizer, tfidf_matrix, knn = prepare_model(df)
 
-    title_input = st.text_input("Masukkan judul film", "Cobra Kai")
+    # Ganti text_input dengan selectbox untuk pilih film
+    title_input = st.selectbox(
+        "Pilih judul film",
+        options=sorted(df['title'].unique()),
+        index=sorted(df['title'].unique()).index("Cobra Kai") if "Cobra Kai" in df['title'].unique() else 0
+    )
+
     n = st.slider("Jumlah rekomendasi", 1, 20, 10)
     min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
     min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
@@ -117,20 +123,23 @@ if not df.empty:
         else:
             st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
 
-            # 🔳 VISUALISASI 5 TERATAS TANPA GAMBAR POSTER
+            # Bagian visualisasi tetap sama...
             st.markdown("## 🎥 Rekomendasi Visual")
             top5 = hasil.head(5)
             for _, row in top5.iterrows():
                 st.markdown(f"### 🎬 {row['Title']}")
-                st.markdown(f"**Genre:** {row['Genre']}")
-                st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
-                st.markdown(f"**Score:** {row['Score']}")
-                st.markdown(f"**Deskripsi:** {row['Description']}")
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    st.text("Poster tidak tersedia")  # sesuai permintaan tanpa poster
+                with col2:
+                    st.markdown(f"**Genre:** {row['Genre']}")
+                    st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
+                    st.markdown(f"**Score:** {row['Score']}")
+                    st.markdown(f"**Deskripsi:** {row['Description']}")
                 st.markdown("---")
 
-            # 🔍 VISUALISASI GRAFIK
+            # Visualisasi grafik
             st.subheader("📊 Visualisasi Data Rekomendasi")
-
             fig_score = px.bar(
                 top5,
                 x='Title',
