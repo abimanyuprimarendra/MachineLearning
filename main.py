@@ -124,9 +124,10 @@ if not df.empty:
             st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
 
             # Bagian visualisasi tetap sama...
-            st.markdown("## 🎥 Rekomendasi Visual")
-            top5 = hasil.head(5)
-           for _, row in top5.iterrows():
+            # Bagian visualisasi rekomendasi film dengan poster (atau tanpa jika kosong)
+st.markdown("## 🎥 Rekomendasi Visual")
+top5 = hasil.head(5)
+for _, row in top5.iterrows():
     st.markdown(f"### 🎬 {row['Title']}")
     if row['Poster']:
         col1, col2 = st.columns([1, 3])
