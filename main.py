@@ -88,10 +88,10 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
             score = (similarity * 0.5) + (rating / 10 * 0.3) + (log1p(votes) / 10 * 0.2)
             recommendations.append((
                 rec_title,
-                round(similarity, 2),
+                round(similarity, 3),
                 rating,
                 f"{votes:,}",
-                round(score, 2),
+                round(score, 4),
                 df.iloc[rec_idx]['description'][:150] + '...'
             ))
             added_titles.add(rec_title.lower())
