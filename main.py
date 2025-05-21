@@ -5,6 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 from numpy import log1p
 import difflib
+import plotly.express as px
 
 # Load dataset dari Google Drive
 @st.cache_data
@@ -13,11 +14,9 @@ def load_data():
     try:
         df = pd.read_csv(csv_url)
 
-        # Bersihkan votes dan rating
         df['votes'] = df['votes'].fillna('0').str.replace(',', '', regex=False).astype(int)
         df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
 
-        # Pembersihan teks
         def clean_text(text):
             text = str(text).lower()
             text = re.sub(r'[^a-z0-9\s]', ' ', text)
@@ -27,7 +26,6 @@ def load_data():
         for col in ['genre', 'description', 'stars']:
             df[col] = df[col].fillna('').apply(clean_text)
 
-        # Gabungkan fitur
         df['combined_features'] = (
             (df['genre'] + ' ') * 2 +
             (df['stars'] + ' ') * 2 +
@@ -76,13 +74,14 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
         if rating >= min_rating and votes >= min_votes:
             score = (similarity * 0.5) + (rating / 10 * 0.3) + (log1p(votes) / 10 * 0.2)
             recommendations.append((
-                rec_title,                                  # Title
-                df.iloc[rec_idx]['genre'],                  # Genre
-                round(similarity, 3),                        # Similarity
-                rating,                                     # Rating
-                round(score, 4),                            # Score
-                df.iloc[rec_idx]['description'][:150] + '...',  # Description
-                f"{votes:,}"                                # Votes formatted
+                rec_title,
+                df.iloc[rec_idx]['genre'],
+                round(similarity, 3),
+                rating,
+                round(score, 4),
+                df.iloc[rec_idx]['description'][:150] + '...',
+                f"{votes:,}",
+                df.iloc[rec_idx].get('poster_url', '')  # Kolom URL gambar
             ))
             added_titles.add(rec_title.lower())
 
@@ -94,11 +93,9 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
 
     recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
     df_result = pd.DataFrame(recommendations, columns=[
-        'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes'
+        'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes', 'Poster'
     ])
     return None, df_result
-
-
 
 # =======================
 # Streamlit App
@@ -120,6 +117,65 @@ if not df.empty:
             st.warning(error_msg)
         else:
             st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
+
+            # 🔳 VISUALISASI 5 TERATAS DENGAN GAMBAR POSTER
+            st.markdown("## 🎥 Rekomendasi Visual")
+            top5 = hasil.head(5)
+            for _, row in top5.iterrows():
+                st.markdown(f"### 🎬 {row['Title']}")
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    if row['Poster']:
+                        st.image(row['Poster'], width=120)
+                    else:
+                        st.text("Poster tidak tersedia")
+                with col2:
+                    st.markdown(f"**Genre:** {row['Genre']}")
+                    st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
+                    st.markdown(f"**Score:** {row['Score']}")
+                    st.markdown(f"**Deskripsi:** {row['Description']}")
+                st.markdown("---")
+
+            # 🔍 VISUALISASI GRAFIK
+            st.subheader("📊 Visualisasi Data Rekomendasi")
+
+            fig_score = px.bar(
+                top5,
+                x='Title',
+                y='Score',
+                color='Score',
+                color_continuous_scale='viridis',
+                title='🔢 Skor Rekomendasi Film',
+                labels={'Score': 'Skor', 'Title': 'Judul'}
+            )
+            st.plotly_chart(fig_score, use_container_width=True)
+
+            fig_scatter = px.scatter(
+                top5,
+                x='Similarity',
+                y='Rating',
+                text='Title',
+                size='Score',
+                color='Score',
+                title='🎯 Similarity vs Rating',
+                labels={'Similarity': 'Kemiripan', 'Rating': 'Rating'}
+            )
+            fig_scatter.update_traces(textposition='top center')
+            st.plotly_chart(fig_scatter, use_container_width=True)
+
+            if top5['Genre'].nunique() > 1:
+                genre_counts = top5['Genre'].value_counts().reset_index()
+                genre_counts.columns = ['Genre', 'Count']
+                fig_pie = px.pie(
+                    genre_counts,
+                    names='Genre',
+                    values='Count',
+                    title='📊 Genre Film yang Direkomendasikan'
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            # Tabel Data
+            st.markdown("## 📋 Tabel Data")
             st.dataframe(hasil.style.highlight_max(axis=0, subset=['Score']), use_container_width=True)
 else:
     st.stop()
