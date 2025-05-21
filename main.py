@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import nltk
+import os
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -9,9 +10,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 from nltk.stem import WordNetLemmatizer
 
-lemmatizer = WordNetLemmatizer()
+# Tentukan folder nltk_data di /tmp agar writable di Streamlit Cloud
+nltk_data_dir = '/tmp/nltk_data'
+if not os.path.exists(nltk_data_dir):
+    os.mkdir(nltk_data_dir)
+nltk.data.path.append(nltk_data_dir)
 
-@st.cache_data(show_spinner=False)
 def download_nltk_resources():
     resources = ['punkt', 'stopwords', 'wordnet']
     for resource in resources:
@@ -21,18 +25,18 @@ def download_nltk_resources():
             else:
                 nltk.data.find(f'corpora/{resource}')
         except LookupError:
-            nltk.download(resource)
-    return True
+            nltk.download(resource, download_dir=nltk_data_dir)
 
 download_nltk_resources()
 
-stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
 
 def preprocess_text_lemmatize(text):
     text = re.sub('[^a-zA-Z]', ' ', str(text))
     text = text.lower()
     tokens = word_tokenize(text)
     tokens = [t for t in tokens if len(t) > 2]
+    stop_words = set(stopwords.words('english'))
     filtered_tokens = [t for t in tokens if t not in stop_words]
     lemmatized_tokens = [lemmatizer.lemmatize(t) for t in filtered_tokens]
     return ' '.join(lemmatized_tokens)
@@ -69,6 +73,7 @@ def get_recommendations(title, cosine_sim, df, n_neighbors=5):
 
 def main():
     st.title("Sistem Rekomendasi Film Netflix (Content-Based Filtering)")
+    download_nltk_resources()  # pastikan resources terdownload saat main dijalankan
     df = load_data()
     tfidf, tfidf_matrix, cosine_sim, knn = create_tfidf_cosine_knn(df)
 
