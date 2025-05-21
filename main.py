@@ -137,7 +137,7 @@ if title:
         else:
             st.write("Tidak ada rekomendasi yang ditemukan.")
 
-    st.markdown("---") # Garis pemisah untuk visualisasi
+    ---
     st.subheader("Visualisasi Perbandingan Skor Kemiripan")
 
     # Kumpulkan data untuk visualisasi
@@ -158,7 +158,7 @@ if title:
     else:
         st.write("Tidak ada data untuk visualisasi.")
 
-    st.markdown("---") # Garis pemisah untuk analisis metrik
+    ---
     st.subheader("Analisis Metrik Perbandingan")
 
     if cosine_recs and knn_recs:
@@ -177,6 +177,22 @@ if title:
             overlap_percentage = (num_common / k_value) * 100
             st.write(f"**Tingkat Kesamaan Rekomendasi (Overlap):** **{overlap_percentage:.2f}%**")
             st.write(f"({num_common} dari {k_value} rekomendasi teratas yang sama)")
+
+            # --- Visualisasi Overlap ---
+            st.write("#### Visualisasi Tingkat Kesamaan Rekomendasi")
+            fig_overlap, ax_overlap = plt.subplots(figsize=(6, 3))
+            methods_labels = ['Overlap']
+            overlap_values = [overlap_percentage]
+
+            ax_overlap.bar(methods_labels, overlap_values, color='skyblue')
+            ax_overlap.set_ylim(0, 100)
+            ax_overlap.set_ylabel('Persentase (%)')
+            ax_overlap.set_title('Persentase Overlap Rekomendasi')
+            for i, v in enumerate(overlap_values):
+                ax_overlap.text(i, v + 2, f"{v:.2f}%", ha='center', va='bottom', fontsize=10)
+            st.pyplot(fig_overlap)
+            # --- Akhir Visualisasi Overlap ---
+
         else:
             st.write("Tidak ada rekomendasi untuk dianalisis (k_value = 0).")
 
@@ -198,6 +214,20 @@ if title:
             st.write(f"- Min: {knn_scores_series.min():.4f}, Max: {knn_scores_series.max():.4f}, Rata-rata: {knn_scores_series.mean():.4f}")
         else:
             st.write(f"- {knn_header_text.replace(' Recommendation', '')}: Tidak ada skor yang tersedia.")
+
+        # --- Visualisasi Distribusi Skor (Box Plot) ---
+        # Pastikan combined_data tidak kosong dan ada skor yang valid
+        if not combined_data.empty and 'Similarity' in combined_data.columns and 'Metode' in combined_data.columns:
+            st.write("#### Visualisasi Distribusi Skor Kemiripan")
+            fig_dist, ax_dist = plt.subplots(figsize=(10, 5))
+
+            # Pastikan 'Metode' kolom di combined_data sudah benar untuk hue
+            sns.boxplot(data=combined_data, x='Similarity', y='Metode', ax=ax_dist, palette='viridis')
+            ax_dist.set_title('Distribusi Skor Kemiripan per Metode')
+            ax_dist.set_xlabel('Skor Kemiripan')
+            ax_dist.set_ylabel('Metode')
+            st.pyplot(fig_dist)
+        # --- Akhir Visualisasi Distribusi Skor ---
 
     else:
         st.write("Tidak cukup rekomendasi untuk analisis perbandingan.")
