@@ -94,7 +94,7 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
 
     recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
     df_result = pd.DataFrame(recommendations, columns=[
-        'Title', 'Similarity', 'Rating', 'Votes', 'Score', 'Description', 'Genre'
+        'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes'
     ])
     return None, df_result
 
