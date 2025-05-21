@@ -80,7 +80,8 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
                 rating,
                 round(score, 4),
                 df.iloc[rec_idx]['description'][:150] + '...',
-                f"{votes:,}"
+                f"{votes:,}",
+                df.iloc[rec_idx].get('poster_url', '')  # Kolom URL gambar, tetap ada tapi tidak ditampilkan
             ))
             added_titles.add(rec_title.lower())
 
@@ -92,7 +93,7 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
 
     recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
     df_result = pd.DataFrame(recommendations, columns=[
-        'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes'
+        'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes', 'Poster'
     ])
     return None, df_result
 
@@ -105,12 +106,8 @@ df = load_data()
 if not df.empty:
     vectorizer, tfidf_matrix, knn = prepare_model(df)
 
-    # Ganti text_input dengan selectbox untuk pilih film
-    title_input = st.selectbox(
-        "Pilih judul film",
-        options=sorted(df['title'].unique()),
-        index=sorted(df['title'].unique()).index("Cobra Kai") if "Cobra Kai" in df['title'].unique() else 0
-    )
+    # Pilih film dari dropdown (bukan input text)
+    title_input = st.selectbox("Pilih judul film", df['title'].sort_values().unique())
 
     n = st.slider("Jumlah rekomendasi", 1, 20, 10)
     min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
@@ -123,32 +120,21 @@ if not df.empty:
         else:
             st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
 
-            # Bagian visualisasi tetap sama...
-            # Bagian visualisasi rekomendasi film dengan poster (atau tanpa jika kosong)
-st.markdown("## 🎥 Rekomendasi Visual")
-top5 = hasil.head(5)
-for _, row in top5.iterrows():
-    st.markdown(f"### 🎬 {row['Title']}")
-    if row['Poster']:
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            st.image(row['Poster'], width=120)
-        with col2:
-            st.markdown(f"**Genre:** {row['Genre']}")
-            st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
-            st.markdown(f"**Score:** {row['Score']}")
-            st.markdown(f"**Deskripsi:** {row['Description']}")
-    else:
-        # Poster kosong, tampilkan detail full lebar tanpa kolom poster
-        st.markdown(f"**Genre:** {row['Genre']}")
-        st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
-        st.markdown(f"**Score:** {row['Score']}")
-        st.markdown(f"**Deskripsi:** {row['Description']}")
-    st.markdown("---")
+            # 🔳 VISUALISASI 5 TERATAS TANPA GAMBAR POSTER
+            st.markdown("## 🎥 Rekomendasi Visual")
+            top5 = hasil.head(5)
+            for _, row in top5.iterrows():
+                st.markdown(f"### 🎬 {row['Title']}")
+                # Tampilkan detail film tanpa poster
+                st.markdown(f"**Genre:** {row['Genre']}")
+                st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
+                st.markdown(f"**Score:** {row['Score']}")
+                st.markdown(f"**Deskripsi:** {row['Description']}")
+                st.markdown("---")
 
-
-            # Visualisasi grafik
+            # 🔍 VISUALISASI GRAFIK
             st.subheader("📊 Visualisasi Data Rekomendasi")
+
             fig_score = px.bar(
                 top5,
                 x='Title',
