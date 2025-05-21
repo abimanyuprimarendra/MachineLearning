@@ -137,8 +137,7 @@ if title:
         else:
             st.write("Tidak ada rekomendasi yang ditemukan.")
 
-
-    # Visualisasi perbandingan skor similarity
+    ---
     st.subheader("Visualisasi Perbandingan Skor Kemiripan")
     
     # Kumpulkan data untuk visualisasi
@@ -159,14 +158,46 @@ if title:
     else:
         st.write("Tidak ada data untuk visualisasi.")
 
-    # Tampilkan film yang direkomendasikan oleh kedua metode
-    st.subheader("Film yang Direkomendasikan oleh Keduanya")
-    cosine_titles = set([title for title, _ in cosine_recs])
-    knn_titles = set([title for title, _ in knn_recs])
-    common_titles = list(cosine_titles & knn_titles)
+    ---
+    st.subheader("Analisis Metrik Perbandingan")
+    
+    if cosine_recs and knn_recs:
+        cosine_titles = set([title for title, _ in cosine_recs])
+        knn_titles = set([title for title, _ in knn_recs])
+        
+        common_titles = list(cosine_titles & knn_titles)
+        num_common = len(common_titles)
+        
+        # Ambil K yang sama dari kedua metode (biasanya top_n yang Anda set di fungsi)
+        # Ambil minimum dari panjang list rekomendasi untuk menghindari indeks error
+        k_value = min(len(cosine_recs), len(knn_recs)) 
+        
+        if k_value > 0:
+            # Tingkat Kesamaan Rekomendasi (Overlap)
+            overlap_percentage = (num_common / k_value) * 100
+            st.write(f"**Tingkat Kesamaan Rekomendasi (Overlap):** **{overlap_percentage:.2f}%**")
+            st.write(f"({num_common} dari {k_value} rekomendasi teratas yang sama)")
+        else:
+            st.write("Tidak ada rekomendasi untuk dianalisis (k_value = 0).")
 
-    if common_titles:
-        for i, common in enumerate(common_titles, 1):
-            st.write(f"{i}. {common}")
+        # Statistik Skor Kemiripan
+        st.write("#### Statistik Skor Kemiripan:")
+        cosine_scores_list = [score for _, score in cosine_recs]
+        knn_scores_list = [score for _, score in knn_recs]
+        
+        if cosine_scores_list:
+            cosine_scores_series = pd.Series(cosine_scores_list)
+            st.write(f"**Cosine Similarity:**")
+            st.write(f"- Min: {cosine_scores_series.min():.4f}, Max: {cosine_scores_series.max():.4f}, Rata-rata: {cosine_scores_series.mean():.4f}")
+        else:
+            st.write("- Cosine Similarity: Tidak ada skor yang tersedia.")
+
+        if knn_scores_list:
+            knn_scores_series = pd.Series(knn_scores_list)
+            st.write(f"**{knn_header_text.replace(' Recommendation', '')}:**")
+            st.write(f"- Min: {knn_scores_series.min():.4f}, Max: {knn_scores_series.max():.4f}, Rata-rata: {knn_scores_series.mean():.4f}")
+        else:
+            st.write(f"- {knn_header_text.replace(' Recommendation', '')}: Tidak ada skor yang tersedia.")
+
     else:
-        st.write("Tidak ada rekomendasi yang sama antara kedua metode.")
+        st.write("Tidak cukup rekomendasi untuk analisis perbandingan.")
