@@ -1,4 +1,5 @@
-gdown
-scikit-learn
-pandas
 streamlit
+pandas
+scikit-learn
+matplotlib
+wordcloud
