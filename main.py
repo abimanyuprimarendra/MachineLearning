@@ -9,7 +9,7 @@ import difflib
 # Load dataset dan cek kolom
 @st.cache_data
 def load_data():
-    csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
+    csv_url = "https://drive.google.com/uc?id=1ix27-hPzSIjBrZGI5fl3HP5QFlJlDY0K"
     df = pd.read_csv(csv_url)
     return df
 
