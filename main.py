@@ -4,6 +4,7 @@ import time
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
+import matplotlib.pyplot as plt
 
 # SET PAGE CONFIG HARUS DI BARIS PERTAMA SEBELUM KODE LAIN
 st.set_page_config(page_title="🎬 Rekomendasi Film Netflix", layout="centered")
@@ -64,6 +65,17 @@ def measure_avg_time(func, title, runs=5):
     avg_time = sum(times) / runs
     return avg_time
 
+def plot_similarity_bar_chart(recommendations, method_name):
+    titles = [rec[0] for rec in recommendations]
+    scores = [rec[1] for rec in recommendations]
+
+    fig, ax = plt.subplots()
+    ax.barh(titles[::-1], scores[::-1], color='skyblue')
+    ax.set_xlabel("Similarity Score")
+    ax.set_title(f"Top 5 Rekomendasi berdasarkan {method_name}")
+    plt.tight_layout()
+    st.pyplot(fig)
+
 st.title("Sistem Rekomendasi Film Netflix")
 
 # Load data dan buat tfidf matrix
@@ -93,3 +105,10 @@ if title:
         st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title}':")
         for rec_title, score in knn_recs:
             st.write(f"- {rec_title} (similarity: {score:.4f})")
+
+        # Tambahkan visualisasi bar chart
+        st.subheader(f"Visualisasi Similarity Scores berdasarkan Cosine Similarity:")
+        plot_similarity_bar_chart(cosine_recs, "Cosine Similarity")
+
+        st.subheader(f"Visualisasi Similarity Scores berdasarkan KNN:")
+        plot_similarity_bar_chart(knn_recs, "KNN")
