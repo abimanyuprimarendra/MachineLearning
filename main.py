@@ -13,8 +13,12 @@ def load_data():
     try:
         df = pd.read_csv(csv_url)
 
-        # Bersihkan votes dan rating
-        df['votes'] = df['votes'].fillna('0').str.replace(',', '', regex=False).astype(int)
+        # Perbaikan pembersihan votes (buat aman dari error)
+        df['votes'] = df['votes'].fillna('0').astype(str)
+        df['votes'] = df['votes'].str.replace(',', '', regex=False)
+        df['votes'] = pd.to_numeric(df['votes'], errors='coerce').fillna(0).astype(int)
+
+        # Bersihkan rating
         df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
 
         # Pembersihan teks
