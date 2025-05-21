@@ -1,116 +1,84 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time
 import heapq
+import time
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
-import matplotlib.pyplot as plt
 
-# SET PAGE CONFIG HARUS DI BARIS PERTAMA SEBELUM KODE LAIN
-st.set_page_config(page_title="🎬 Rekomendasi Film Netflix", layout="centered")
-
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data():
-    # Ganti url ini sesuai file kamu di Google Drive (pastikan shared link bisa diakses publik)
-    csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
-    df = pd.read_csv(csv_url)
-
+    file_path = '/content/drive/MyDrive/Semester 6/Machine Learning 2025/Netflix.csv'
+    df = pd.read_csv(file_path)
     features = ['title', 'listed_in'] + (['description'] if 'description' in df.columns else [])
     df[features] = df[features].fillna('')
     df['combined'] = df[features].agg(' '.join, axis=1)
-
     return df
 
-@st.cache_data
-def create_tfidf_matrix(df):
+@st.cache_data(show_spinner=False)
+def build_tfidf_and_knn(df):
     tfidf = TfidfVectorizer(stop_words='english')
-    return tfidf.fit_transform(df['combined']).astype(np.float32)
+    tfidf_matrix = tfidf.fit_transform(df['combined']).astype(np.float32)
+    knn_model = NearestNeighbors(metric='cosine', algorithm='brute', n_jobs=-1)
+    knn_model.fit(tfidf_matrix)
+    return tfidf_matrix, knn_model
 
-@st.cache_resource
-def create_knn_model(tfidf_matrix):
-    knn = NearestNeighbors(metric='cosine', algorithm='brute', n_jobs=-1)
-    knn.fit(tfidf_matrix)
-    return knn
+df = load_data()
+tfidf_matrix, knn_model = build_tfidf_and_knn(df)
 
-def get_content_based_recommendations(title, df, tfidf_matrix, indices, num_recommendations=10):
+indices = pd.Series(df.index, index=df['title']).drop_duplicates()
+
+def get_content_based_recommendations(title, num_recommendations=10):
     if title not in indices:
         return "Judul tidak ditemukan di dataset."
-
     idx = indices[title]
     cosine_sim_row = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten().astype(np.float32)
     sim_scores = list(enumerate(cosine_sim_row))
     top_sim_scores = heapq.nlargest(num_recommendations + 1, sim_scores, key=lambda x: x[1])
     top_sim_scores = [item for item in top_sim_scores if item[0] != idx][:num_recommendations]
-
-    recommended = [(df['title'].iloc[i], score) for i, score in top_sim_scores]
+    recommended = [f"{df['title'].iloc[i]} (cosine similarity: {score:.4f})" for i, score in top_sim_scores]
     return recommended
 
-def get_knn_recommendations(title, df, tfidf_matrix, knn_model, indices, num_recommendations=10):
+def get_knn_recommendations(title, num_recommendations=10):
     if title not in indices:
         return "Judul tidak ditemukan di dataset."
-
     idx = indices[title]
     distances, neighbors = knn_model.kneighbors(tfidf_matrix[idx], n_neighbors=num_recommendations + 1)
     distances = distances.flatten()[1:]
     neighbors = neighbors.flatten()[1:]
-
-    recommended = [(df['title'].iloc[i], 1 - dist) for i, dist in zip(neighbors, distances)]
+    recommended = []
+    for i, dist in zip(neighbors, distances):
+        similarity = 1 - dist
+        recommended.append(f"{df['title'].iloc[i]} (similarity: {similarity:.4f})")
     return recommended
 
-def measure_avg_time(func, title, runs=5):
-    times = []
-    for _ in range(runs):
-        start = time.time()
-        func(title)
-        end = time.time()
-        times.append(end - start)
-    return sum(times) / runs
+st.title("Rekomendasi Film Netflix")
 
-def plot_similarity_bar_chart(recommendations, method_name):
-    titles = [rec[0] for rec in recommendations]
-    scores = [rec[1] for rec in recommendations]
+title_input = st.text_input("Masukkan judul film:", "Dick Johnson Is Dead")
+num_recs = st.slider("Jumlah rekomendasi:", 1, 20, 10)
 
-    fig, ax = plt.subplots()
-    ax.barh(titles[::-1], scores[::-1], color='skyblue')
-    ax.set_xlabel("Similarity Score")
-    ax.set_title(f"Top {len(recommendations)} Rekomendasi berdasarkan {method_name}")
-    plt.tight_layout()
-    st.pyplot(fig)
+if title_input:
+    start = time.time()
+    content_recs = get_content_based_recommendations(title_input, num_recs)
+    end = time.time()
+    st.write(f"Waktu eksekusi Content-Based (Cosine Similarity): {end - start:.5f} detik")
 
-# MAIN STREAMLIT APP
-st.title("Sistem Rekomendasi Film Netflix")
+    start = time.time()
+    knn_recs = get_knn_recommendations(title_input, num_recs)
+    end = time.time()
+    st.write(f"Waktu eksekusi KNN: {end - start:.5f} detik")
 
-# Load dataset dan buat tfidf matrix + knn model
-df = load_data()
-tfidf_matrix = create_tfidf_matrix(df)
-knn_model = create_knn_model(tfidf_matrix)
-indices = pd.Series(df.index, index=df['title']).drop_duplicates()
+    st.subheader(f"Rekomendasi berdasarkan Content-Based untuk '{title_input}':")
+    if isinstance(content_recs, list):
+        for rec in content_recs:
+            st.write(rec)
+    else:
+        st.write(content_recs)
 
-title = st.selectbox("Pilih judul film:", options=df['title'].sort_values().unique())
-
-if title:
-    with st.spinner("Menghitung rekomendasi..."):
-        avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations(t, df, tfidf_matrix, indices), title)
-        avg_time_knn = measure_avg_time(lambda t=title: get_knn_recommendations(t, df, tfidf_matrix, knn_model, indices), title)
-
-        st.write(f"Rata-rata waktu eksekusi Content-Based (Cosine Similarity): **{avg_time_cosine:.5f} detik**")
-        st.write(f"Rata-rata waktu eksekusi KNN: **{avg_time_knn:.5f} detik**")
-
-        cosine_recs = get_content_based_recommendations(title, df, tfidf_matrix, indices)
-        knn_recs = get_knn_recommendations(title, df, tfidf_matrix, knn_model, indices)
-
-        st.subheader(f"Rekomendasi berdasarkan Content-Based untuk '{title}':")
-        for rec_title, score in cosine_recs:
-            st.write(f"- {rec_title} (similarity: {score:.4f})")
-
-        st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title}':")
-        for rec_title, score in knn_recs:
-            st.write(f"- {rec_title} (similarity: {score:.4f})")
-
-        st.subheader("Visualisasi Similarity Scores (Content-Based):")
-        plot_similarity_bar_chart(cosine_recs, "Content-Based (Cosine Similarity)")
-
-        st.subheader("Visualisasi Similarity Scores (KNN):")
-        plot_similarity_bar_chart(knn_recs, "KNN")
+    st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title_input}':")
+    if isinstance(knn_recs, list):
+        for rec in knn_recs:
+            st.write(rec)
+    else:
+        st.write(knn_recs)
