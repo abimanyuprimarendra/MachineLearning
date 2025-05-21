@@ -1,52 +1,110 @@
 import streamlit as st
 import pandas as pd
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.neighbors import NearestNeighbors
+from numpy import log1p
 
+# Load dataset dari Google Drive
 @st.cache_data
 def load_data():
-    file_path = 'https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-'
-    df = pd.read_csv(file_path)
-    df.fillna('', inplace=True)
-    # Gabungkan kolom yang ingin dijadikan fitur
-    df['combined_features'] = df['director'] + ' ' + df['country'] + ' ' + df['listed_in']
+    csv_url = "https://drive.google.com/uc?id=1ix27-hPzSIjBrZGI5fl3HP5QFlJlDY0K"
+    df = pd.read_csv(csv_url)
+
+    # Bersihkan votes dan rating
+    df['votes'] = df['votes'].fillna('0').str.replace(',', '', regex=False).astype(int)
+    df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
+
+    # Fungsi pembersihan teks
+    def clean_text(text):
+        text = str(text).lower()
+        text = re.sub(r'[^a-z0-9\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+
+    # Bersihkan kolom genre, description, stars
+    for col in ['genre', 'description', 'stars']:
+        df[col] = df[col].fillna('').apply(clean_text)
+
+    # Gabungkan fitur untuk TF-IDF
+    df['combined_features'] = (
+        (df['genre'] + ' ') * 2 +
+        (df['stars'] + ' ') * 2 +
+        df['description']
+    )
+
     return df
 
-@st.cache_data
-def create_tfidf_cosine(df):
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
-    cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-    return cosine_sim
+# Load data
+df = load_data()
 
-def get_recommendations(title, cosine_sim, df, n=5):
-    indices = pd.Series(df.index, index=df['title']).drop_duplicates()
-    if title not in indices:
-        return None
-    idx = indices[title]
-    sim_scores = list(enumerate(cosine_sim[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:n+1]
-    movie_indices = [i[0] for i in sim_scores]
-    return df.iloc[movie_indices][['title', 'director', 'release_year', 'rating']]
+# TF-IDF dan KNN
+vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=10000)
+tfidf_matrix = vectorizer.fit_transform(df['combined_features'])
 
-def main():
-    st.title("Rekomendasi Film Netflix (Simple Version)")
+knn = NearestNeighbors(metric='cosine', algorithm='brute')
+knn.fit(tfidf_matrix)
 
-    df = load_data()
-    cosine_sim = create_tfidf_cosine(df)
+# Fungsi rekomendasi
+def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
+    idx_list = df.index[df['title'].str.lower() == title.lower()]
+    if len(idx_list) == 0:
+        return "Film tidak ditemukan!"
+    idx = idx_list[0]
 
-    movie_list = df['title'].tolist()
-    selected_movie = st.selectbox("Pilih film:", movie_list)
-    n_recs = st.slider("Jumlah rekomendasi:", 3, 10, 5)
+    distances, indices = knn.kneighbors(tfidf_matrix[idx], n_neighbors=50)
 
-    if st.button("Cari Rekomendasi"):
-        recs = get_recommendations(selected_movie, cosine_sim, df, n_recs)
-        if recs is not None:
-            st.subheader(f"Film mirip dengan '{selected_movie}':")
-            st.dataframe(recs.reset_index(drop=True))
-        else:
-            st.error("Judul film tidak ditemukan.")
+    recommendations = []
+    added_titles = set()
 
-if __name__ == '__main__':
-    main()
+    for i in range(1, len(indices[0])):
+        rec_idx = indices[0][i]
+        rec_title = df.iloc[rec_idx]['title']
+
+        if rec_title.lower() == title.lower() or rec_title.lower() in added_titles:
+            continue
+
+        rating = df.iloc[rec_idx]['rating']
+        votes = df.iloc[rec_idx]['votes']
+        similarity = 1 - distances[0][i]
+
+        if rating >= min_rating and votes >= min_votes:
+            score = (similarity * 0.5) + (rating / 10 * 0.3) + (log1p(votes) / 10 * 0.2)
+            recommendations.append((
+                rec_title,
+                round(similarity, 3),
+                rating,
+                f"{votes:,}",
+                round(score, 4),
+                df.iloc[rec_idx]['description'][:150] + '...'
+            ))
+            added_titles.add(rec_title.lower())
+
+        if len(recommendations) == n_recommendations:
+            break
+
+    if not recommendations:
+        return "Tidak ada film yang direkomendasikan berdasarkan kriteria."
+
+    recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
+
+    return pd.DataFrame(recommendations, columns=[
+        'Title', 'Similarity', 'Rating', 'Votes', 'Score', 'Description'
+    ])
+
+# Streamlit UI
+st.title("🎬 Sistem Rekomendasi Film")
+
+judul_input = st.text_input("Masukkan judul film", "Cobra Kai")
+n = st.slider("Jumlah rekomendasi", 1, 20, 10)
+min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
+min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
+
+if st.button("Rekomendasikan"):
+    hasil = recommend(judul_input, n, min_rating, min_votes)
+
+    if isinstance(hasil, str):
+        st.warning(hasil)
+    else:
+        st.success(f"Berikut adalah {len(hasil)} film yang mirip dengan '{judul_input}' 🎉")
+        st.dataframe(hasil, use_container_width=True)
