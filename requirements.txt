@@ -2,3 +2,4 @@ gdown
 scikit-learn
 pandas
 streamlit
+request
