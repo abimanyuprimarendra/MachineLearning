@@ -9,33 +9,30 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 from nltk.stem import WordNetLemmatizer
 
-# Pastikan nltk resources tersedia
+lemmatizer = WordNetLemmatizer()
+
+@st.cache_data(show_spinner=False)
 def download_nltk_resources():
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
-
-    try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
-        nltk.download('stopwords')
-
-    try:
-        nltk.data.find('corpora/wordnet')
-    except LookupError:
-        nltk.download('wordnet')
+    resources = ['punkt', 'stopwords', 'wordnet']
+    for resource in resources:
+        try:
+            if resource == 'punkt':
+                nltk.data.find(f'tokenizers/{resource}')
+            else:
+                nltk.data.find(f'corpora/{resource}')
+        except LookupError:
+            nltk.download(resource)
+    return True
 
 download_nltk_resources()
 
-lemmatizer = WordNetLemmatizer()
+stop_words = set(stopwords.words('english'))
 
 def preprocess_text_lemmatize(text):
     text = re.sub('[^a-zA-Z]', ' ', str(text))
     text = text.lower()
     tokens = word_tokenize(text)
     tokens = [t for t in tokens if len(t) > 2]
-    stop_words = set(stopwords.words('english'))
     filtered_tokens = [t for t in tokens if t not in stop_words]
     lemmatized_tokens = [lemmatizer.lemmatize(t) for t in filtered_tokens]
     return ' '.join(lemmatized_tokens)
