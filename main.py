@@ -1,104 +1,120 @@
 import streamlit as st
 import pandas as pd
 import time
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
+# Fungsi load data dari Google Drive dengan caching agar efisien
 @st.cache_data
 def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
-    if 'description' in data.columns:
-        data['description'] = data['description'].fillna('')
-    else:
-        data['description'] = ''
+    data['description'] = data['description'].fillna('') if 'description' in data.columns else ''
     data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
     return data
 
-@st.cache_data(show_spinner=False)
+# Membuat matriks TF-IDF dari gabungan kolom teks
+@st.cache_data
 def create_tfidf_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['combined'])
     return tfidf_matrix
 
-# Jangan pakai cache pada fungsi ini karena menerima tfidf_matrix (sparse matrix)
-def create_knn_model(tfidf_matrix):
-    knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
-    knn_model.fit(tfidf_matrix)
-    return knn_model
+# Membuat model KNN dengan metric 'cosine'
+@st.cache_resource
+def create_knn_model():
+    # Metric 'cosine' artinya menggunakan jarak cosine (bukan similarity langsung)
+    # NearestNeighbors mencari tetangga terdekat berdasarkan jarak ini
+    return NearestNeighbors(metric='cosine', algorithm='brute')
 
-def get_content_based_recommendations_with_scores(title, cosine_sim, df, top_n=5):
+# Fungsi rekomendasi berbasis cosine similarity full matrix
+def get_content_based_recommendations(title, cosine_sim, df, top_n=5):
+    """
+    Cosine Similarity:
+    Mengukur kemiripan dua vektor teks (film) dengan rumus:
+    cosine_sim(A, B) = (A dot B) / (||A|| * ||B||)
+    Menghasilkan nilai antara 0 (tidak mirip) sampai 1 (identik).
+    """
     if title not in df['title'].values:
-        return "Judul tidak ditemukan di dataset."
+        return []
     idx = df[df['title'] == title].index[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:top_n+1]  # Ambil top_n rekomendasi
-    recommended = [(df['title'].iloc[i], score) for i, score in sim_scores]
-    return recommended
+    sim_scores = sim_scores[1:top_n+1]  # Ambil top N selain diri sendiri
+    return [(df['title'].iloc[i], score) for i, score in sim_scores]
 
-def get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, top_n=5):
+# Fungsi rekomendasi berbasis KNN dengan jarak cosine
+def get_knn_recommendations(title, knn_model, df, tfidf_matrix, top_n=5):
+    """
+    KNN dengan metric 'cosine' menghitung jarak cosine:
+    distance = 1 - cosine_similarity
+    Model mencari tetangga terdekat berdasarkan jarak ini.
+    Skor similarity dikembalikan dengan membalik jarak:
+    similarity = 1 - distance
+    """
     if title not in df['title'].values:
-        return "Judul tidak ditemukan di dataset."
+        return []
     idx = df[df['title'] == title].index[0]
     item_vector = tfidf_matrix[idx]
     distances, indices_knn = knn_model.kneighbors(item_vector, n_neighbors=top_n + 1)
-    recommended_indices = indices_knn.flatten()[1:]
+    recommended_indices = indices_knn.flatten()[1:]  # Kecuali diri sendiri
     distances = distances.flatten()[1:]
-    recommended = [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
-    return recommended
+    return [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
 
-def measure_avg_time(func, title, runs=10):
-    times = []
-    for _ in range(runs):
-        start = time.time()
-        func(title)
-        end = time.time()
-        times.append(end - start)
-    avg_time = sum(times) / runs
-    return avg_time
-
-st.title("Sistem Rekomendasi Film Netflix")
+# Streamlit UI utama
+st.title("Perbandingan Rekomendasi Film: KNN vs Cosine Similarity")
 
 df = load_data_from_drive()
 tfidf_matrix = create_tfidf_matrix(df)
+cosine_sim = cosine_similarity(tfidf_matrix)
 
-# Create knn_model tanpa cache agar tidak error
-knn_model = create_knn_model(tfidf_matrix)
+knn_model = create_knn_model()
+knn_model.fit(tfidf_matrix)  # Fit model sekali saja
 
-title = st.selectbox("Pilih judul film untuk direkomendasikan:", options=df['title'].sort_values().unique())
+title = st.selectbox("Pilih judul film:", options=df['title'].sort_values().unique())
 
 if title:
-    with st.spinner("Menghitung rekomendasi..."):
-        avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_similarity(tfidf_matrix, tfidf_matrix), df, top_n=1), title)
-        avg_time_knn = measure_avg_time(lambda t=title: get_knn_recommendations_with_scores(t, knn_model, df, tfidf_matrix, top_n=1), title)
+    cosine_recs = get_content_based_recommendations(title, cosine_sim, df)
+    knn_recs = get_knn_recommendations(title, knn_model, df, tfidf_matrix)
 
-        st.write(f"Rata-rata waktu eksekusi Cosine Similarity (1 rekomendasi): **{avg_time_cosine:.5f} detik**")
-        st.write(f"Rata-rata waktu eksekusi KNN (1 rekomendasi): **{avg_time_knn:.5f} detik**")
+    # Tampilkan rekomendasi berdampingan
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Cosine Similarity")
+        for i, (rec_title, score) in enumerate(cosine_recs, 1):
+            st.write(f"{i}. {rec_title} (similarity: {score:.4f})")
 
-        cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)  # Hitung di sini agar tidak cache dan error
-        cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df, top_n=1)
-        knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, top_n=1)
+    with col2:
+        st.subheader("KNN Recommendation")
+        for i, (rec_title, score) in enumerate(knn_recs, 1):
+            st.write(f"{i}. {rec_title} (similarity: {score:.4f})")
 
-        st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk '{title}':")
-        for rec_title, score in cosine_recs:
-            st.write(f"- {rec_title} (similarity: {score:.4f})")
+    # Visualisasi perbandingan skor similarity
+    st.subheader("Visualisasi Perbandingan Skor Similarity")
+    combined_data = pd.DataFrame({
+        'Film': [rec[0] for rec in cosine_recs] + [rec[0] for rec in knn_recs],
+        'Similarity': [rec[1] for rec in cosine_recs] + [rec[1] for rec in knn_recs],
+        'Metode': ['Cosine'] * len(cosine_recs) + ['KNN'] * len(knn_recs)
+    })
 
-        st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title}':")
-        for rec_title, score in knn_recs:
-            st.write(f"- {rec_title} (similarity: {score:.4f})")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    plt.figure(figsize=(10, 5))
+    sns.barplot(data=combined_data, x='Similarity', y='Film', hue='Metode')
+    st.pyplot(plt.gcf())
 
-    st.markdown("""
-    ---
-    ### Perbandingan Metode Rekomendasi
+    # Tampilkan film yang direkomendasikan oleh kedua metode
+    st.subheader("Film yang Direkomendasikan oleh Keduanya")
+    cosine_titles = set([title for title, _ in cosine_recs])
+    knn_titles = set([title for title, _ in knn_recs])
+    common_titles = list(cosine_titles & knn_titles)
 
-    Kedua metode menggunakan data dan film input yang sama, namun berbeda dalam cara pengukuran dan efisiensi:
-
-    - **Cosine Similarity** menghitung skor kesamaan secara global antara semua film. Ini memberi gambaran menyeluruh, namun bisa lambat jika data sangat besar.
-
-    - **K-Nearest Neighbors (KNN)** fokus pada pencarian tetangga terdekat untuk film yang dipilih. Ini lebih efisien untuk aplikasi real-time dan dataset besar.
-
-    Hasil rekomendasi keduanya biasanya mirip, namun KNN lebih scalable dan praktis untuk sistem rekomendasi.
-    """)
+    if common_titles:
+        for i, common in enumerate(common_titles, 1):
+            st.write(f"{i}. {common}")
+    else:
+        st.write("Tidak ada rekomendasi yang sama antara kedua metode.")
