@@ -76,13 +76,13 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
         if rating >= min_rating and votes >= min_votes:
             score = (similarity * 0.5) + (rating / 10 * 0.3) + (log1p(votes) / 10 * 0.2)
             recommendations.append((
-                rec_title,
-                round(similarity, 3),
-                rating,
-                f"{votes:,}",
-                round(score, 4),
-                df.iloc[rec_idx]['description'][:150] + '...',
-                df.iloc[rec_idx]['genre']  # genre ditambahkan di sini
+                rec_title,                                  # Title
+                df.iloc[rec_idx]['genre'],                  # Genre
+                round(similarity, 3),                        # Similarity
+                rating,                                     # Rating
+                round(score, 4),                            # Score
+                df.iloc[rec_idx]['description'][:150] + '...',  # Description
+                f"{votes:,}"                                # Votes formatted
             ))
             added_titles.add(rec_title.lower())
 
@@ -97,6 +97,7 @@ def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
         'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes'
     ])
     return None, df_result
+
 
 
 # =======================
