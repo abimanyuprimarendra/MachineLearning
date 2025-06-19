@@ -10,7 +10,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # -----------------------
 @st.cache_data
 def load_data():
-    csv_url = "https://drive.google.com/file/d/1tHMyi7TRCapR6_UbHDd-Wbfr5GL_dE6x/view?usp=sharing"
+    csv_url = "https://drive.google.com/uc?id=1ix27-hPzSIjBrZGI5fl3HP5QFlJlDY0K&export=download"
     df = pd.read_csv(csv_url)
 
     # Pra-pemrosesan
