@@ -42,6 +42,19 @@ cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix, dense_output=False)
 indices = pd.Series(df.index, index=df['title']).drop_duplicates()
 
 # ================================
+# 🎯 Fungsi Kategori Kemiripan
+# ================================
+def get_similarity_level(score):
+    if score >= 0.80:
+        return "🟢 Sangat Mirip"
+    elif score >= 0.60:
+        return "🟡 Mirip"
+    elif score >= 0.40:
+        return "🟠 Cukup Mirip"
+    else:
+        return "🔴 Sedikit Mirip"
+
+# ================================
 # 🎯 Fungsi Rekomendasi
 # ================================
 def recommend(title, n_recommendations=5):
@@ -71,7 +84,8 @@ def recommend(title, n_recommendations=5):
             'Genre': df.loc[i, 'genres'],
             'Tahun Rilis': df.loc[i, 'releaseYear'],
             'Rating': df.loc[i, 'imdbAverageRating'],
-            'Similarity': round(score, 3)
+            'Kemiripan (%)': round(score * 100, 1),
+            'Tingkat': get_similarity_level(score)
         }
         selected_rows.append(row)
 
@@ -85,19 +99,20 @@ st.set_page_config(page_title="🎬 Rekomendasi Film", layout="centered")
 st.markdown("""
     <h1 style='text-align: center; color: #FF4B4B;'>🎬 Sistem Rekomendasi Film</h1>
     <p style='text-align: center;'>Berbasis <b>Content-Based Filtering</b> menggunakan <b>TF-IDF</b> dan <b>Cosine Similarity</b>.</p>
+    <p style='text-align: center; font-size: 14px;'>Nilai kemiripan dihitung berdasarkan genre, judul, dan tahun rilis. Di atas 40% dianggap relevan.</p>
 """, unsafe_allow_html=True)
 
-# Dropdown: tampilkan pilihan berdasarkan title_original
+# Dropdown
 st.markdown("## 🎞️ Pilih Film Referensi")
 film_list = sorted(df['title_original'].unique())
 selected_film = st.selectbox("Pilih judul film:", film_list)
 
-# Tombol: Klik untuk tampilkan rekomendasi
+# Tombol
 if st.button("🎯 Tampilkan Rekomendasi"):
     result_df, error = recommend(selected_film)
     if error:
         st.warning(error)
     else:
         st.success(f"✅ Rekomendasi film untuk: **{selected_film}**")
-        st.markdown("### 🎥 Daftar Rekomendasi:")
+        st.markdown("### 🎥 Daftar Rekomendasi Berdasarkan Kemiripan")
         st.dataframe(result_df, use_container_width=True, hide_index=True)
