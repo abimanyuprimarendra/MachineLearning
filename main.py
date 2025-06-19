@@ -30,9 +30,9 @@ df = df.dropna().reset_index(drop=True)
 df['combined_features'] = df['title'] + ' ' + df['genres'] + ' ' + df['releaseYear'].astype(str)
 
 # ================================
-# 🔍 TF-IDF dan Cosine Similarity (Efisien)
+# 🔍 TF-IDF dan Cosine Similarity
 # ================================
-tfidf = TfidfVectorizer(stop_words='english', max_features=5000)  # Batasi kata agar hemat RAM
+tfidf = TfidfVectorizer(stop_words='english', max_features=5000)
 tfidf_matrix = tfidf.fit_transform(df['combined_features'])
 
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix, dense_output=False)
@@ -61,21 +61,27 @@ def recommend(title, n_recommendations=5):
         if len(recommendations) == n_recommendations:
             break
 
-    return df.iloc[recommendations][['title', 'genres', 'releaseYear', 'imdbAverageRating']], None
+    selected = df.iloc[recommendations][['title', 'genres', 'releaseYear', 'imdbAverageRating']]
+    selected.columns = ['Judul Film', 'Genre', 'Tahun Rilis', 'Rating']
+    return selected, None
 
 # ================================
 # 🎛️ Streamlit UI
 # ================================
 st.set_page_config(page_title="🎬 Rekomendasi Film", layout="centered")
-st.title("🎬 Sistem Rekomendasi Film")
-st.markdown("Berbasis **Content-Based Filtering** menggunakan TF-IDF dan Cosine Similarity.")
+st.markdown("""
+    <h1 style='text-align: center; color: #FF4B4B;'>🎬 Sistem Rekomendasi Film</h1>
+    <p style='text-align: center;'>Berbasis <b>Content-Based Filtering</b> menggunakan <b>TF-IDF</b> dan <b>Cosine Similarity</b>.</p>
+""", unsafe_allow_html=True)
 
-user_input = st.text_input("Masukkan judul film (contoh: The Dark Knight)", "")
+st.markdown("## 🔎 Cari Film")
+user_input = st.text_input("Masukkan judul film (misal: The Dark Knight)", "")
 
 if user_input:
     result_df, error = recommend(user_input)
     if error:
         st.warning(error)
     else:
-        st.success(f"Rekomendasi film untuk: **{user_input.title()}**")
-        st.dataframe(result_df)
+        st.success(f"✅ Rekomendasi film untuk: **{user_input.title()}**")
+        st.markdown("### 🎥 Daftar Rekomendasi:")
+        st.dataframe(result_df, use_container_width=True)
