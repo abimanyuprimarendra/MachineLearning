@@ -1,177 +1,78 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
-import re
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.neighbors import NearestNeighbors
-from numpy import log1p
-import difflib
-import plotly.express as px
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Load dataset dari Google Drive
+# -----------------------
+# 1. Load Data dari Google Drive
+# -----------------------
 @st.cache_data
 def load_data():
-    csv_url = "https://drive.google.com/uc?id=1ix27-hPzSIjBrZGI5fl3HP5QFlJlDY0K"
-    try:
-        df = pd.read_csv(csv_url)
+    csv_url = "https://drive.google.com/file/d/1tHMyi7TRCapR6_UbHDd-Wbfr5GL_dE6x/view?usp=sharing"
+    df = pd.read_csv(csv_url)
 
-        df['votes'] = df['votes'].fillna('0').str.replace(',', '', regex=False).astype(int)
-        df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
+    # Pra-pemrosesan
+    df = df.dropna(subset=['title', 'genres', 'releaseYear'])
+    df['title'] = df['title'].str.lower().str.strip()
+    df['genres'] = df['genres'].str.lower().str.strip()
+    df['releaseYear'] = df['releaseYear'].astype(int)
 
-        def clean_text(text):
-            text = str(text).lower()
-            text = re.sub(r'[^a-z0-9\s]', ' ', text)
-            text = re.sub(r'\s+', ' ', text).strip()
-            return text
-
-        for col in ['genre', 'description', 'stars']:
-            df[col] = df[col].fillna('').apply(clean_text)
-
-        df['combined_features'] = (
-            (df['genre'] + ' ') * 2 +
-            (df['stars'] + ' ') * 2 +
-            df['description']
-        )
-        return df
-    except Exception as e:
-        st.error(f"Gagal memuat data: {e}")
-        return pd.DataFrame()
-
-# Siapkan model TF-IDF dan KNN
-@st.cache_resource
-def prepare_model(df):
-    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=10000)
-    tfidf_matrix = vectorizer.fit_transform(df['combined_features'])
-
-    knn = NearestNeighbors(metric='cosine', algorithm='brute')
-    knn.fit(tfidf_matrix)
-
-    return vectorizer, tfidf_matrix, knn
-
-# Fungsi rekomendasi
-def recommend(title, n_recommendations=5, min_rating=7, min_votes=1000):
-    idx_list = df.index[df['title'].str.lower() == title.lower()]
-    if len(idx_list) == 0:
-        closest_matches = difflib.get_close_matches(title, df['title'], n=3)
-        return f"Film tidak ditemukan! Coba: {', '.join(closest_matches)}" if closest_matches else "Film tidak ditemukan!", None
-
-    idx = idx_list[0]
-    distances, indices = knn.kneighbors(tfidf_matrix[idx], n_neighbors=50)
-
-    recommendations = []
-    added_titles = set()
-
-    for i in range(1, len(indices[0])):
-        rec_idx = indices[0][i]
-        rec_title = df.iloc[rec_idx]['title']
-
-        if rec_title.lower() == title.lower() or rec_title.lower() in added_titles:
-            continue
-
-        rating = df.iloc[rec_idx]['rating']
-        votes = df.iloc[rec_idx]['votes']
-        similarity = 1 - distances[0][i]
-
-        if rating >= min_rating and votes >= min_votes:
-            score = (similarity * 0.5) + (rating / 10 * 0.3) + (log1p(votes) / 10 * 0.2)
-            recommendations.append((
-                rec_title,
-                df.iloc[rec_idx]['genre'],
-                round(similarity, 3),
-                rating,
-                round(score, 4),
-                df.iloc[rec_idx]['description'][:150] + '...',
-                f"{votes:,}",
-                df.iloc[rec_idx].get('poster_url', '')  # Kolom URL gambar, tetap ada tapi tidak ditampilkan
-            ))
-            added_titles.add(rec_title.lower())
-
-        if len(recommendations) == n_recommendations:
-            break
-
-    if not recommendations:
-        return "Tidak ada film yang direkomendasikan berdasarkan kriteria.", None
-
-    recommendations = sorted(recommendations, key=lambda x: x[4], reverse=True)
-    df_result = pd.DataFrame(recommendations, columns=[
-        'Title', 'Genre', 'Similarity', 'Rating', 'Score', 'Description', 'Votes', 'Poster'
-    ])
-    return None, df_result
-
-# =======================
-# Streamlit App
-# =======================
-st.title("🎬 Sistem Rekomendasi Film")
+    # Gabungkan fitur konten
+    df['combined_features'] = df['title'] + ' ' + df['genres'] + ' ' + df['releaseYear'].astype(str)
+    
+    return df
 
 df = load_data()
-if not df.empty:
-    vectorizer, tfidf_matrix, knn = prepare_model(df)
 
-    # Pilih film dari dropdown (bukan input text)
-    title_input = st.selectbox("Pilih judul film", df['title'].sort_values().unique())
+# -----------------------
+# 2. TF-IDF dan Cosine Similarity
+# -----------------------
+@st.cache_data
+def compute_similarity(df):
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
+    cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+    indices = pd.Series(df.index, index=df['title']).drop_duplicates()
+    return cosine_sim, indices
 
-    n = st.slider("Jumlah rekomendasi", 1, 20, 10)
-    min_rating = st.slider("Minimal rating", 0.0, 10.0, 7.0)
-    min_votes = st.number_input("Minimal jumlah votes", min_value=0, value=1000)
+cosine_sim, indices = compute_similarity(df)
 
-    if st.button("Rekomendasikan"):
-        error_msg, hasil = recommend(title_input, n, min_rating, min_votes)
-        if error_msg:
-            st.warning(error_msg)
-        else:
-            st.success(f"Berikut adalah {len(hasil)} film mirip '{title_input}' 🎉")
+# -----------------------
+# 3. Fungsi Rekomendasi
+# -----------------------
+def recommend(title, n=5):
+    title = title.lower().strip()
+    if title not in indices:
+        return None
+    idx = indices[title]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:]
+    seen = set()
+    results = []
+    for i, _ in sim_scores:
+        film_title = df.loc[i, 'title']
+        if film_title not in seen:
+            seen.add(film_title)
+            results.append(i)
+        if len(results) == n:
+            break
+    return df[['title', 'genres', 'releaseYear']].iloc[results]
 
-            # 🔳 VISUALISASI 5 TERATAS TANPA GAMBAR POSTER
-            st.markdown("## 🎥 Rekomendasi Visual")
-            top5 = hasil.head(5)
-            for _, row in top5.iterrows():
-                st.markdown(f"### 🎬 {row['Title']}")
-                # Tampilkan detail film tanpa poster
-                st.markdown(f"**Genre:** {row['Genre']}")
-                st.markdown(f"**Rating:** {row['Rating']} ⭐  |  **Votes:** {row['Votes']}")
-                st.markdown(f"**Score:** {row['Score']}")
-                st.markdown(f"**Deskripsi:** {row['Description']}")
-                st.markdown("---")
+# -----------------------
+# 4. Streamlit UI
+# -----------------------
+st.set_page_config(page_title="🎬 Rekomendasi Film", layout="centered")
+st.title("🎬 Sistem Rekomendasi Film")
+st.caption("Berbasis Content-Based Filtering dari Google Drive")
 
-            # 🔍 VISUALISASI GRAFIK
-            st.subheader("📊 Visualisasi Data Rekomendasi")
+input_title = st.text_input("Masukkan judul film", placeholder="Contoh: inception")
 
-            fig_score = px.bar(
-                top5,
-                x='Title',
-                y='Score',
-                color='Score',
-                color_continuous_scale='viridis',
-                title='🔢 Skor Rekomendasi Film',
-                labels={'Score': 'Skor', 'Title': 'Judul'}
-            )
-            st.plotly_chart(fig_score, use_container_width=True)
-
-            fig_scatter = px.scatter(
-                top5,
-                x='Similarity',
-                y='Rating',
-                text='Title',
-                size='Score',
-                color='Score',
-                title='🎯 Similarity vs Rating',
-                labels={'Similarity': 'Kemiripan', 'Rating': 'Rating'}
-            )
-            fig_scatter.update_traces(textposition='top center')
-            st.plotly_chart(fig_scatter, use_container_width=True)
-
-            if top5['Genre'].nunique() > 1:
-                genre_counts = top5['Genre'].value_counts().reset_index()
-                genre_counts.columns = ['Genre', 'Count']
-                fig_pie = px.pie(
-                    genre_counts,
-                    names='Genre',
-                    values='Count',
-                    title='📊 Genre Film yang Direkomendasikan'
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
-
-            # Tabel Data
-            st.markdown("## 📋 Tabel Data")
-            st.dataframe(hasil.style.highlight_max(axis=0, subset=['Score']), use_container_width=True)
-else:
-    st.stop()
+if input_title:
+    if input_title.lower().strip() not in indices:
+        st.warning("❌ Film tidak ditemukan dalam data.")
+    else:
+        st.success(f"Hasil rekomendasi untuk: {input_title.title()}")
+        result_df = recommend(input_title, n=5)
+        st.table(result_df)
