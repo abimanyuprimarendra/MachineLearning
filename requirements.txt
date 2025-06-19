@@ -1,7 +1,3 @@
 streamlit
 pandas
 scikit-learn
-nltk
-plotly
-numpy
-requests
