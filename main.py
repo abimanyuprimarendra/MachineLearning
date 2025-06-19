@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # ================================
 @st.cache_data
 def load_data_from_drive(n_rows=1000):
-    url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
+    url = "https://drive.google.com/uc?id=1tHMyi7TRCapR6_UbHDd-Wbfr5GL_dE6x"
     df = pd.read_csv(url).head(n_rows)
     return df
 
