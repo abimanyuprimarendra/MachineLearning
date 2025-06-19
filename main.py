@@ -11,7 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 @st.cache_data
 def load_data():
     # Gunakan link yang bisa langsung diakses
-    csv_url = "https://drive.google.com/uc?id=1tHMyi7TRCapR6_UbHDd-Wbfr5GL_dE6x"
+    csv_url = "https://raw.githubusercontent.com/abimanyuprimarendra/MachineLearning/refs/heads/main/dataset_film.csv"
     
     # Baca CSV
     df = pd.read_csv(csv_url)
