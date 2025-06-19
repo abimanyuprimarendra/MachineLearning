@@ -20,7 +20,7 @@ df = load_data_from_drive()
 required_cols = ['title', 'genres', 'releaseYear', 'imdbAverageRating', 'imdbNumVotes']
 df = df.dropna(subset=required_cols)
 
-# Simpan versi asli untuk dropdown (tanpa lowercase)
+# Simpan versi asli untuk dropdown
 df['title_original'] = df['title']
 
 df['title'] = df['title'].str.lower().str.strip()
@@ -56,17 +56,27 @@ def recommend(title, n_recommendations=5):
     seen_titles = set()
     recommendations = []
 
-    for i, _ in sim_scores:
+    for i, score in sim_scores:
         film_title = df.loc[i, 'title']
         if film_title not in seen_titles:
             seen_titles.add(film_title)
-            recommendations.append(i)
+            recommendations.append((i, score))
         if len(recommendations) == n_recommendations:
             break
 
-    selected = df.iloc[recommendations][['title_original', 'genres', 'releaseYear', 'imdbAverageRating']]
-    selected.columns = ['Judul Film', 'Genre', 'Tahun Rilis', 'Rating']
-    return selected.reset_index(drop=True), None
+    selected_rows = []
+    for i, score in recommendations:
+        row = {
+            'Judul Film': df.loc[i, 'title_original'],
+            'Genre': df.loc[i, 'genres'],
+            'Tahun Rilis': df.loc[i, 'releaseYear'],
+            'Rating': df.loc[i, 'imdbAverageRating'],
+            'Similarity': round(score, 3)
+        }
+        selected_rows.append(row)
+
+    result_df = pd.DataFrame(selected_rows)
+    return result_df, None
 
 # ================================
 # 🎛️ Streamlit UI
@@ -77,7 +87,7 @@ st.markdown("""
     <p style='text-align: center;'>Berbasis <b>Content-Based Filtering</b> menggunakan <b>TF-IDF</b> dan <b>Cosine Similarity</b>.</p>
 """, unsafe_allow_html=True)
 
-# Dropdown: tampilkan pilihan berdasarkan title_original (tanpa lowercase)
+# Dropdown: tampilkan pilihan berdasarkan title_original
 st.markdown("## 🎞️ Pilih Film Referensi")
 film_list = sorted(df['title_original'].unique())
 selected_film = st.selectbox("Pilih judul film:", film_list)
