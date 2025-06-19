@@ -63,7 +63,7 @@ def recommend(title, n_recommendations=5):
 
     selected = df.iloc[recommendations][['title', 'genres', 'releaseYear', 'imdbAverageRating']]
     selected.columns = ['Judul Film', 'Genre', 'Tahun Rilis', 'Rating']
-    return selected, None
+    return selected.reset_index(drop=True), None
 
 # ================================
 # 🎛️ Streamlit UI
@@ -74,14 +74,17 @@ st.markdown("""
     <p style='text-align: center;'>Berbasis <b>Content-Based Filtering</b> menggunakan <b>TF-IDF</b> dan <b>Cosine Similarity</b>.</p>
 """, unsafe_allow_html=True)
 
-st.markdown("## 🔎 Cari Film")
-user_input = st.text_input("Masukkan judul film (misal: The Dark Knight)", "")
+# Dropdown pilihan film
+st.markdown("## 🎞️ Pilih Film Referensi")
+film_list = sorted(df['title'].str.title().unique())
+selected_film = st.selectbox("Pilih judul film:", film_list)
 
-if user_input:
-    result_df, error = recommend(user_input)
+# Tombol rekomendasi
+if st.button("🎯 Tampilkan Rekomendasi"):
+    result_df, error = recommend(selected_film)
     if error:
         st.warning(error)
     else:
-        st.success(f"✅ Rekomendasi film untuk: **{user_input.title()}**")
+        st.success(f"✅ Rekomendasi film untuk: **{selected_film}**")
         st.markdown("### 🎥 Daftar Rekomendasi:")
-        st.dataframe(result_df, use_container_width=True)
+        st.dataframe(result_df, use_container_width=True, hide_index=True)
