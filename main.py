@@ -10,20 +10,40 @@ from sklearn.metrics.pairwise import cosine_similarity
 # -----------------------
 @st.cache_data
 def load_data():
+    # Gunakan link yang bisa langsung diakses
     csv_url = "https://drive.google.com/uc?id=1ix27-hPzSIjBrZGI5fl3HP5QFlJlDY0K&export=download"
+    
+    # Baca CSV
     df = pd.read_csv(csv_url)
 
+    # Normalisasi nama kolom agar aman
+    df.columns = df.columns.str.strip().str.lower()
+    
+    # Rename jika perlu
+    if 'release year' in df.columns:
+        df.rename(columns={'release year': 'releaseyear'}, inplace=True)
+
+    # Validasi kolom
+    required_cols = ['title', 'genres', 'releaseyear']
+    for col in required_cols:
+        if col not in df.columns:
+            st.error(f"❌ Kolom '{col}' tidak ditemukan di dataset.")
+            return pd.DataFrame()  # Kosong agar tidak crash
+
     # Pra-pemrosesan
-    df = df.dropna(subset=['title', 'genres', 'releaseYear'])
+    df = df.dropna(subset=required_cols)
     df['title'] = df['title'].str.lower().str.strip()
     df['genres'] = df['genres'].str.lower().str.strip()
-    df['releaseYear'] = df['releaseYear'].astype(int)
+    df['releaseyear'] = df['releaseyear'].astype(int)
 
     # Gabungkan fitur konten
-    df['combined_features'] = df['title'] + ' ' + df['genres'] + ' ' + df['releaseYear'].astype(str)
-    
+    df['combined_features'] = (
+        df['title'] + ' ' + df['genres'] + ' ' + df['releaseyear'].astype(str)
+    )
+
     return df
 
+# Load data
 df = load_data()
 
 # -----------------------
@@ -31,6 +51,8 @@ df = load_data()
 # -----------------------
 @st.cache_data
 def compute_similarity(df):
+    if df.empty:
+        return None, None
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['combined_features'])
     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
@@ -49,6 +71,7 @@ def recommend(title, n=5):
     idx = indices[title]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:]
+
     seen = set()
     results = []
     for i, _ in sim_scores:
@@ -58,21 +81,26 @@ def recommend(title, n=5):
             results.append(i)
         if len(results) == n:
             break
-    return df[['title', 'genres', 'releaseYear']].iloc[results]
+    return df[['title', 'genres', 'releaseyear']].iloc[results]
 
 # -----------------------
-# 4. Streamlit UI
+# 4. Tampilan Streamlit
 # -----------------------
 st.set_page_config(page_title="🎬 Rekomendasi Film", layout="centered")
 st.title("🎬 Sistem Rekomendasi Film")
-st.caption("Berbasis Content-Based Filtering dari Google Drive")
+st.caption("Content-Based Filtering | Data dari Google Drive")
 
-input_title = st.text_input("Masukkan judul film", placeholder="Contoh: inception")
+if df.empty:
+    st.stop()
 
-if input_title:
-    if input_title.lower().strip() not in indices:
-        st.warning("❌ Film tidak ditemukan dalam data.")
+# Dropdown agar user lebih mudah pilih film
+film_options = df['title'].drop_duplicates().sort_values().str.title().tolist()
+selected_title = st.selectbox("Pilih judul film", film_options)
+
+if selected_title:
+    st.markdown(f"**Hasil rekomendasi untuk:** `{selected_title}`")
+    result_df = recommend(selected_title)
+    if result_df is not None:
+        st.dataframe(result_df.reset_index(drop=True), use_container_width=True)
     else:
-        st.success(f"Hasil rekomendasi untuk: {input_title.title()}")
-        result_df = recommend(input_title, n=5)
-        st.table(result_df)
+        st.warning("❌ Film tidak ditemukan atau tidak ada rekomendasi.")
