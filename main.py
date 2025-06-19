@@ -20,6 +20,9 @@ df = load_data_from_drive()
 required_cols = ['title', 'genres', 'releaseYear', 'imdbAverageRating', 'imdbNumVotes']
 df = df.dropna(subset=required_cols)
 
+# Simpan versi asli untuk dropdown (tanpa lowercase)
+df['title_original'] = df['title']
+
 df['title'] = df['title'].str.lower().str.strip()
 df['genres'] = df['genres'].str.lower().str.strip()
 df['releaseYear'] = df['releaseYear'].astype(int)
@@ -42,11 +45,11 @@ indices = pd.Series(df.index, index=df['title']).drop_duplicates()
 # 🎯 Fungsi Rekomendasi
 # ================================
 def recommend(title, n_recommendations=5):
-    title = title.lower().strip()
-    if title not in indices:
+    title_lower = title.lower().strip()
+    if title_lower not in indices:
         return [], f"Film '{title}' tidak ditemukan di dataset."
 
-    idx = indices[title]
+    idx = indices[title_lower]
     sim_scores = list(enumerate(cosine_sim[idx].toarray().flatten()))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:]
 
@@ -61,7 +64,7 @@ def recommend(title, n_recommendations=5):
         if len(recommendations) == n_recommendations:
             break
 
-    selected = df.iloc[recommendations][['title', 'genres', 'releaseYear', 'imdbAverageRating']]
+    selected = df.iloc[recommendations][['title_original', 'genres', 'releaseYear', 'imdbAverageRating']]
     selected.columns = ['Judul Film', 'Genre', 'Tahun Rilis', 'Rating']
     return selected.reset_index(drop=True), None
 
@@ -74,12 +77,12 @@ st.markdown("""
     <p style='text-align: center;'>Berbasis <b>Content-Based Filtering</b> menggunakan <b>TF-IDF</b> dan <b>Cosine Similarity</b>.</p>
 """, unsafe_allow_html=True)
 
-# Dropdown pilihan film
+# Dropdown: tampilkan pilihan berdasarkan title_original (tanpa lowercase)
 st.markdown("## 🎞️ Pilih Film Referensi")
-film_list = sorted(df['title'].str.title().unique())
+film_list = sorted(df['title_original'].unique())
 selected_film = st.selectbox("Pilih judul film:", film_list)
 
-# Tombol rekomendasi
+# Tombol: Klik untuk tampilkan rekomendasi
 if st.button("🎯 Tampilkan Rekomendasi"):
     result_df, error = recommend(selected_film)
     if error:
