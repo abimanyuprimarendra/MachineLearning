@@ -102,13 +102,15 @@ if mode == "Rekomendasi Film":
         cols = st.columns(5)  # 5 kolom dalam satu baris
 
         for i, film in enumerate(rekomendasi[:5]):  # hanya 5 film ditampilkan
+            genre_cleaned = ', '.join(f.strip() for f in film['Genre'].strip("[]").replace("'", "").split(','))
+
             with cols[i % 5]:
                 st.markdown(f"""
                 <div style="background-color:#fdfdfd; padding:12px; border-radius:10px; margin-bottom:15px; 
                             box-shadow: 2px 2px 6px rgba(0,0,0,0.1); min-height: 300px; display: flex; flex-direction: column; justify-content: space-between;">
                     <div>
-                        <h5 style="font-size:16px;">🎞️ {film['Judul']}</h5>
-                        <p style="font-size:13px;"><strong>Genre:</strong> {film['Genre']}</p>
+                        <h4 style="font-size:17px; font-weight:700;">🎞️ {film['Judul']}</h4>
+                        <p style="font-size:13px;"><strong>Genre:</strong> {genre_cleaned}</p>
                         <p style="font-size:13px;"><strong>Rating:</strong> {film['Rating']}</p>
                         <p style="font-size:12px; color:gray;"><em>{film['Deskripsi']}</em></p>
                     </div>
