@@ -91,7 +91,7 @@ knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
 knn_model.fit(tfidf_matrix)
 
 # ===============================
-# HALAMAN: Rekomendasi Film (5 data, horizontal, card sejajar)
+# HALAMAN: Rekomendasi Film (5 data, horizontal, ukuran sama)
 # ===============================
 if mode == "Rekomendasi Film":
     st.title("🎬 Rekomendasi Film Berdasarkan Judul")
@@ -104,37 +104,14 @@ if mode == "Rekomendasi Film":
         for i, film in enumerate(rekomendasi[:5]):  # hanya 5 film ditampilkan
             with cols[i % 5]:
                 st.markdown(f"""
-                <style>
-                .film-card {{
-                    background-color:#fdfdfd;
-                    padding:12px;
-                    border-radius:10px;
-                    box-shadow: 2px 2px 6px rgba(0,0,0,0.1);
-                    min-height: 320px;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: space-between;
-                }}
-                .film-title {{
-                    font-size: 16px;
-                    font-weight: bold;
-                    margin-bottom: 8px;
-                }}
-                .film-meta {{
-                    font-size: 13px;
-                    margin-bottom: 8px;
-                }}
-                .film-desc {{
-                    font-size: 12px;
-                    color: gray;
-                    flex-grow: 1;
-                }}
-                </style>
-
-                <div class="film-card">
-                    <div class="film-title">🎞️ {film['Judul']}</div>
-                    <div class="film-meta"><strong>Genre:</strong> {film['Genre']}<br><strong>Rating:</strong> {film['Rating']}</div>
-                    <div class="film-desc"><em>{film['Deskripsi']}</em></div>
+                <div style="background-color:#fdfdfd; padding:12px; border-radius:10px; margin-bottom:15px; 
+                            box-shadow: 2px 2px 6px rgba(0,0,0,0.1); min-height: 300px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h5 style="font-size:16px;">🎞️ {film['Judul']}</h5>
+                        <p style="font-size:13px;"><strong>Genre:</strong> {film['Genre']}</p>
+                        <p style="font-size:13px;"><strong>Rating:</strong> {film['Rating']}</p>
+                        <p style="font-size:12px; color:gray;"><em>{film['Deskripsi']}</em></p>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
     else:
