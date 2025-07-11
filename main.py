@@ -91,7 +91,7 @@ knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
 knn_model.fit(tfidf_matrix)
 
 # ===============================
-# HALAMAN: Rekomendasi Film (5 data, horizontal)
+# HALAMAN: Rekomendasi Film (5 data, horizontal, ukuran sama)
 # ===============================
 if mode == "Rekomendasi Film":
     st.title("🎬 Rekomendasi Film Berdasarkan Judul")
@@ -104,30 +104,33 @@ if mode == "Rekomendasi Film":
         for i, film in enumerate(rekomendasi[:5]):  # hanya 5 film ditampilkan
             with cols[i % 5]:
                 st.markdown(f"""
-                <div style="background-color:#fdfdfd; padding:12px; border-radius:10px; margin-bottom:15px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1);">
-                    <h5 style="font-size:16px;">🎞️ {film['Judul']}</h5>
-                    <p style="font-size:13px;"><strong>Genre:</strong> {film['Genre']}</p>
-                    <p style="font-size:13px;"><strong>Rating:</strong> {film['Rating']}</p>
-                    <p style="font-size:12px; color:gray;"><em>{film['Deskripsi']}</em></p>
+                <div style="background-color:#fdfdfd; padding:12px; border-radius:10px; margin-bottom:15px; 
+                            box-shadow: 2px 2px 6px rgba(0,0,0,0.1); min-height: 300px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h5 style="font-size:16px;">🎞️ {film['Judul']}</h5>
+                        <p style="font-size:13px;"><strong>Genre:</strong> {film['Genre']}</p>
+                        <p style="font-size:13px;"><strong>Rating:</strong> {film['Rating']}</p>
+                        <p style="font-size:12px; color:gray;"><em>{film['Deskripsi']}</em></p>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
     else:
         st.warning(f"Film '{judul_dipilih}' tidak ditemukan dalam dataset.")
 
 # ===============================
-# HALAMAN: Visualisasi Jarak
+# HALAMAN: Visualisasi Jarak (5 data)
 # ===============================
 elif mode == "Visualisasi Jarak":
     st.title("📊 Visualisasi Jarak Cosine Film Serupa")
     rekomendasi = get_recommendations_verbose(judul_dipilih, df, tfidf_matrix, knn_model)
 
     if rekomendasi:
-        rekomendasi_df = pd.DataFrame(rekomendasi)
+        rekomendasi_df = pd.DataFrame(rekomendasi[:5])  # hanya 5 data
         rekomendasi_df = rekomendasi_df.sort_values(by='Jarak', ascending=True)
 
         plt.figure(figsize=(10, 4))
         sns.barplot(x='Judul', y='Jarak', data=rekomendasi_df, palette='magma')
-        plt.title(f'Jarak Cosine Distance untuk Film Mirip "{judul_dipilih}"')
+        plt.title(f'Jarak Cosine Distance (Top 5) untuk Film Mirip "{judul_dipilih}"')
         plt.xlabel('Judul Film')
         plt.ylabel('Jarak (semakin kecil = semakin mirip)')
         plt.xticks(rotation=45, ha='right')
