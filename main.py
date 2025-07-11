@@ -52,7 +52,6 @@ def get_recommendations_verbose(title, df, tfidf_matrix, knn_model, n=10):
                 'Genre': genre,
                 'Rating': rating,
                 'Deskripsi': overview,
-                'Similarity': round(similarity, 4)
             })
 
         return results
