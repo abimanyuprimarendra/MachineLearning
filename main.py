@@ -94,12 +94,13 @@ if st.button("Tampilkan Rekomendasi"):
         st.subheader(f"Hasil Rekomendasi Mirip '{judul_dipilih}'")
         for film in rekomendasi:
             with st.container():
-                st.markdown(f"""
+               st.markdown(f"""
                 <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; margin-bottom:10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1);">
                     <h5>🎞️ {film['Judul']}</h5>
                     <p><strong>Genre:</strong> {film['Genre']} | <strong>Rating:</strong> {film['Rating']}</p>
-                    <p style="color:gray;"><em>{film['Deskripsi'][:250]}...</em></p>
+                    <p style="color:gray;"><em>{film['Deskripsi']}</em></p>
                 </div>
                 """, unsafe_allow_html=True)
+
     else:
         st.warning(f"Film '{judul_dipilih}' tidak ditemukan dalam dataset.")
