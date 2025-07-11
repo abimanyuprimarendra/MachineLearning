@@ -132,7 +132,7 @@ elif mode == "Visualisasi Jarak":
 
         plt.figure(figsize=(10, 4))
         sns.barplot(x='Judul', y='Jarak', data=rekomendasi_df, palette='magma')
-        plt.title(f'Jarak Cosine Distance (Top 5) untuk Film Mirip "{judul_dipilih}"')
+        plt.title(f'Jarak Cosine Distance (Top 5) untuk Film Mirip  "{judul_dipilih}"')
         plt.xlabel('Judul Film')
         plt.ylabel('Jarak (semakin kecil = semakin mirip)')
         plt.xticks(rotation=45, ha='right')
