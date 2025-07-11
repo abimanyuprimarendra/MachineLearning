@@ -1,12 +1,10 @@
 import streamlit as st
 import pandas as pd
 import re
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.neighbors import NearestNeighbors
 import requests
 import io
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
 
 # ===============================
 # Load dataset dari Google Drive
@@ -65,10 +63,10 @@ def get_recommendations_verbose(title, df, tfidf_matrix, knn_model, n=10):
 # ===============================
 # App Streamlit
 # ===============================
-st.set_page_config(page_title="Sistem Rekomendasi Film", layout="wide")
-st.title("🎬 Sistem Rekomendasi Film")
+st.set_page_config(page_title="Rekomendasi Film", layout="wide")
+st.title("🎬 Rekomendasi Film Berdasarkan Judul")
 
-menu = st.sidebar.radio("📁 Navigasi", ["Rekomendasi Film", "Visualisasi Dataset"])
+# Load dataset
 df = load_data_from_gdrive()
 if df is None:
     st.stop()
@@ -86,65 +84,24 @@ tfidf_matrix = tfidf.fit_transform(df['clean_text'])
 knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
 knn_model.fit(tfidf_matrix)
 
-# ===============================
-# Halaman Rekomendasi
-# ===============================
-if menu == "Rekomendasi Film":
-    st.subheader("🔍 Rekomendasi Berdasarkan Judul Film")
+# Dropdown untuk memilih film
+judul_pilihan = sorted(df['movie title'].unique())
+judul_dipilih = st.selectbox("📽️ Pilih Judul Film", judul_pilihan, index=judul_pilihan.index("Spider-Man") if "Spider-Man" in judul_pilihan else 0)
 
-    judul_input = st.text_input("Masukkan Judul Film", value="Spider-Man")
-    if st.button("Tampilkan Rekomendasi"):
-        rekomendasi = get_recommendations_verbose(judul_input, df, tfidf_matrix, knn_model)
+if st.button("Tampilkan Rekomendasi"):
+    rekomendasi = get_recommendations_verbose(judul_dipilih, df, tfidf_matrix, knn_model)
 
-        if rekomendasi:
-            for film in rekomendasi:
-                with st.container():
-                    st.markdown(f"""
-                    <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; margin-bottom:10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1);">
-                        <h5>🎞️ {film['Judul']}</h5>
-                        <p><strong>Genre:</strong> {film['Genre']} | <strong>Rating:</strong> {film['Rating']}</p>
-                        <p style="color:gray;"><em>{film['Deskripsi'][:250]}...</em></p>
-                        <p><strong>Similarity:</strong> {film['Similarity']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.warning(f"Film '{judul_input}' tidak ditemukan dalam dataset.")
-
-# ===============================
-# Halaman Visualisasi
-# ===============================
-elif menu == "Visualisasi Dataset":
-    st.subheader("📊 Visualisasi Data Film")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("### 🎭 Genre Film Terbanyak")
-        st.markdown("Visualisasi 10 genre film yang paling sering muncul dalam dataset.")
-        genres = df['Generes'].dropna().astype(str).str.replace(r'[\[\]\'\"]', '', regex=True).str.split(', ')
-        genre_counts = genres.explode().value_counts().head(10)
-
-        fig1, ax1 = plt.subplots()
-        genre_counts.plot(kind='barh', ax=ax1, color='skyblue')
-        ax1.set_xlabel("Jumlah Film")
-        ax1.set_ylabel("Genre")
-        ax1.set_title("Top 10 Genre Terpopuler")
-        ax1.invert_yaxis()
-        st.pyplot(fig1)
-
-    with col2:
-        st.markdown("### ⭐ Distribusi Rating Film")
-        st.markdown("Distribusi jumlah film berdasarkan nilai rating.")
-        if 'Rating' in df.columns:
-            try:
-                df['Rating'] = pd.to_numeric(df['Rating'], errors='coerce')
-                fig2, ax2 = plt.subplots()
-                sns.histplot(df['Rating'].dropna(), bins=20, kde=True, ax=ax2, color='salmon')
-                ax2.set_xlabel("Rating")
-                ax2.set_ylabel("Jumlah Film")
-                ax2.set_title("Distribusi Rating Film")
-                st.pyplot(fig2)
-            except:
-                st.warning("Rating tidak bisa divisualisasikan.")
-        else:
-            st.warning("Kolom Rating tidak tersedia.")
+    if rekomendasi:
+        st.subheader(f"Hasil Rekomendasi Mirip '{judul_dipilih}'")
+        for film in rekomendasi:
+            with st.container():
+                st.markdown(f"""
+                <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; margin-bottom:10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1);">
+                    <h5>🎞️ {film['Judul']}</h5>
+                    <p><strong>Genre:</strong> {film['Genre']} | <strong>Rating:</strong> {film['Rating']}</p>
+                    <p style="color:gray;"><em>{film['Deskripsi'][:250]}...</em></p>
+                    <p><strong>Similarity:</strong> {film['Similarity']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.warning(f"Film '{judul_dipilih}' tidak ditemukan dalam dataset.")
