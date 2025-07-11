@@ -62,73 +62,74 @@ def get_recommendations_verbose(title, df, tfidf_matrix, knn_model, n=10):
         return None
 
 # ===============================
-# App Streamlit
+# Streamlit App
 # ===============================
-st.set_page_config(page_title="Rekomendasi Film", layout="wide")
-st.title("🎬 Sistem Rekomendasi Film")
+st.set_page_config(page_title="🎬 Rekomendasi Film", layout="wide")
 
-# Pilih Mode Navigasi
-mode = st.radio("Pilih Mode Tampilan:", ["Rekomendasi", "Visualisasi"])
+# Sidebar navigation
+with st.sidebar:
+    st.title("🎥 Navigasi")
+    mode = st.radio("Pilih Halaman", ["Rekomendasi Film", "Visualisasi Jarak"])
+    df_sample = load_data_from_gdrive()
+    judul_pilihan = sorted(df_sample['movie title'].unique())
+    judul_dipilih = st.selectbox("🎬 Pilih Judul Film", judul_pilihan, index=judul_pilihan.index("Spider-Man") if "Spider-Man" in judul_pilihan else 0)
 
-# Load dataset
+# Load dataset & model
 df = load_data_from_gdrive()
 if df is None:
     st.stop()
 
-# Preprocessing
 features = ['movie title', 'Generes', 'Director', 'Writer']
 for f in features:
     df[f] = df[f].fillna('')
 df['combined_features'] = df.apply(lambda row: ' '.join(row[f] for f in features), axis=1)
 df['clean_text'] = df['combined_features'].apply(preprocess_text)
 
-# TF-IDF dan KNN
 tfidf = TfidfVectorizer()
 tfidf_matrix = tfidf.fit_transform(df['clean_text'])
 knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
 knn_model.fit(tfidf_matrix)
 
-# Dropdown untuk memilih film
-judul_pilihan = sorted(df['movie title'].unique())
-judul_dipilih = st.selectbox("📽️ Pilih Judul Film", judul_pilihan, index=judul_pilihan.index("Spider-Man") if "Spider-Man" in judul_pilihan else 0)
-
-# ==========================
-# MODE 1: Tampilkan Rekomendasi
-# ==========================
-if mode == "Rekomendasi":
-    if st.button("Tampilkan Rekomendasi"):
-        rekomendasi = get_recommendations_verbose(judul_dipilih, df, tfidf_matrix, knn_model)
-
-        if rekomendasi:
-            st.subheader(f"Hasil Rekomendasi Mirip '{judul_dipilih}'")
-            for film in rekomendasi:
-                with st.container():
-                    st.markdown(f"""
-                    <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; margin-bottom:10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1);">
-                        <h5>🎞️ {film['Judul']}</h5>
-                        <p><strong>Genre:</strong> {film['Genre']} | <strong>Rating:</strong> {film['Rating']}</p>
-                        <p style="color:gray;"><em>{film['Deskripsi']}</em></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.warning(f"Film '{judul_dipilih}' tidak ditemukan dalam dataset.")
-
-# ==========================
-# MODE 2: Visualisasi Jarak
-# ==========================
-elif mode == "Visualisasi":
+# ===============================
+# HALAMAN: Rekomendasi Film (5 data, horizontal)
+# ===============================
+if mode == "Rekomendasi Film":
+    st.title("🎬 Rekomendasi Film Berdasarkan Judul")
     rekomendasi = get_recommendations_verbose(judul_dipilih, df, tfidf_matrix, knn_model)
+
+    if rekomendasi:
+        st.subheader(f"5 Film Mirip '{judul_dipilih}'")
+        cols = st.columns(5)  # 5 kolom dalam satu baris
+
+        for i, film in enumerate(rekomendasi[:5]):  # hanya 5 film ditampilkan
+            with cols[i % 5]:
+                st.markdown(f"""
+                <div style="background-color:#fdfdfd; padding:12px; border-radius:10px; margin-bottom:15px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1);">
+                    <h5 style="font-size:16px;">🎞️ {film['Judul']}</h5>
+                    <p style="font-size:13px;"><strong>Genre:</strong> {film['Genre']}</p>
+                    <p style="font-size:13px;"><strong>Rating:</strong> {film['Rating']}</p>
+                    <p style="font-size:12px; color:gray;"><em>{film['Deskripsi']}</em></p>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.warning(f"Film '{judul_dipilih}' tidak ditemukan dalam dataset.")
+
+# ===============================
+# HALAMAN: Visualisasi Jarak
+# ===============================
+elif mode == "Visualisasi Jarak":
+    st.title("📊 Visualisasi Jarak Cosine Film Serupa")
+    rekomendasi = get_recommendations_verbose(judul_dipilih, df, tfidf_matrix, knn_model)
+
     if rekomendasi:
         rekomendasi_df = pd.DataFrame(rekomendasi)
         rekomendasi_df = rekomendasi_df.sort_values(by='Jarak', ascending=True)
 
-        st.subheader(f"Visualisasi Jarak Cosine Film Mirip '{judul_dipilih}'")
-
         plt.figure(figsize=(10, 4))
         sns.barplot(x='Judul', y='Jarak', data=rekomendasi_df, palette='magma')
-        plt.title('Jarak Cosine Distance')
+        plt.title(f'Jarak Cosine Distance untuk Film Mirip "{judul_dipilih}"')
         plt.xlabel('Judul Film')
-        plt.ylabel('Jarak (Semakin kecil = Semakin Mirip)')
+        plt.ylabel('Jarak (semakin kecil = semakin mirip)')
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
 
