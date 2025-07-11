@@ -10,7 +10,7 @@ import requests
 import io
 
 # ===============================
-# Ambil dataset dari Google Drive via file ID
+# Load dataset dari Google Drive
 # ===============================
 @st.cache_data
 def load_data_from_gdrive():
@@ -23,7 +23,7 @@ def load_data_from_gdrive():
     return pd.read_csv(io.BytesIO(response.content))
 
 # ===============================
-# Preprocessing
+# Preprocessing teks
 # ===============================
 def preprocess_text(text):
     text = text.lower()
@@ -32,7 +32,7 @@ def preprocess_text(text):
     return ' '.join(tokens)
 
 # ===============================
-# Fungsi rekomendasi
+# Fungsi Rekomendasi
 # ===============================
 def get_recommendations_verbose(title, df, tfidf_matrix, knn_model, n=10):
     try:
@@ -73,40 +73,45 @@ def get_recommendations_verbose(title, df, tfidf_matrix, knn_model, n=10):
         return None
 
 # ===============================
-# Streamlit App
+# Aplikasi Streamlit
 # ===============================
-st.title("🎬 Sistem Rekomendasi Film - Content-Based + KNN")
+st.set_page_config(page_title="Sistem Rekomendasi Film", layout="wide")
+st.title("🎬 Sistem Rekomendasi Film")
 
+# Sidebar navigasi
+menu = st.sidebar.radio("📁 Navigasi", ["Rekomendasi Film", "Visualisasi Dataset"])
+
+# Load Data
 df = load_data_from_gdrive()
 
-if df is not None:
-    st.success("✅ Dataset berhasil dimuat!")
+if df is None:
+    st.stop()
 
-    # Gabungkan fitur
-    features = ['movie title', 'Generes', 'Director', 'Writer']
-    for feature in features:
-        df[feature] = df[feature].fillna('')
-    df['combined_features'] = df.apply(lambda row: ' '.join(row[feature] for feature in features), axis=1)
-    df['clean_text'] = df['combined_features'].apply(preprocess_text)
+# Preprocessing
+features = ['movie title', 'Generes', 'Director', 'Writer']
+for feature in features:
+    df[feature] = df[feature].fillna('')
+df['combined_features'] = df.apply(lambda row: ' '.join(row[feature] for feature in features), axis=1)
+df['clean_text'] = df['combined_features'].apply(preprocess_text)
 
-    # TF-IDF dan KNN
-    tfidf = TfidfVectorizer()
-    tfidf_matrix = tfidf.fit_transform(df['clean_text'])
+# TF-IDF dan KNN
+tfidf = TfidfVectorizer()
+tfidf_matrix = tfidf.fit_transform(df['clean_text'])
+knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
+knn_model.fit(tfidf_matrix)
 
-    knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
-    knn_model.fit(tfidf_matrix)
+# ===============================
+# HALAMAN: Rekomendasi
+# ===============================
+if menu == "Rekomendasi Film":
+    st.subheader("🔍 Cari Rekomendasi Film Serupa")
 
-    # Input judul film
-    judul_input = st.text_input("Masukkan judul film:", value="Spider-Man")
-
-    if st.button("🔍 Rekomendasikan"):
+    judul_input = st.text_input("Masukkan Judul Film", value="Spider-Man")
+    if st.button("Tampilkan Rekomendasi"):
         rekomendasi_df = get_recommendations_verbose(judul_input, df, tfidf_matrix, knn_model)
-
         if rekomendasi_df is not None:
-            st.subheader("🎯 Rekomendasi Film Serupa:")
             st.dataframe(rekomendasi_df)
 
-            # Barplot visualisasi
             fig, ax = plt.subplots(figsize=(10, 4))
             sns.barplot(x='Judul', y='Jarak', data=rekomendasi_df, palette='magma', ax=ax)
             ax.set_title(f'Cosine Distance Film Mirip "{judul_input}"', fontsize=14)
@@ -115,6 +120,39 @@ if df is not None:
             plt.xticks(rotation=45, ha='right')
             st.pyplot(fig)
         else:
-            st.warning(f"⚠️ Film '{judul_input}' tidak ditemukan dalam dataset.")
-else:
-    st.error("❌ Gagal memuat data.")
+            st.warning(f"Film '{judul_input}' tidak ditemukan dalam dataset.")
+
+# ===============================
+# HALAMAN: Visualisasi Dataset
+# ===============================
+elif menu == "Visualisasi Dataset":
+    st.subheader("📊 Visualisasi Dataset Film")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### Genre Terbanyak")
+        all_genres = df['Generes'].dropna().astype(str).str.replace(r'[\[\]\'\"]', '', regex=True).str.split(', ')
+        genre_series = all_genres.explode().value_counts().head(10)
+
+        fig1, ax1 = plt.subplots()
+        genre_series.plot(kind='barh', color='skyblue', ax=ax1)
+        ax1.set_xlabel("Jumlah Film")
+        ax1.set_ylabel("Genre")
+        ax1.invert_yaxis()
+        st.pyplot(fig1)
+
+    with col2:
+        st.markdown("#### Distribusi Rating Film")
+        if 'Rating' in df.columns:
+            try:
+                df['Rating'] = pd.to_numeric(df['Rating'], errors='coerce')
+                fig2, ax2 = plt.subplots()
+                sns.histplot(df['Rating'].dropna(), bins=20, kde=True, color='salmon', ax=ax2)
+                ax2.set_xlabel("Rating")
+                ax2.set_ylabel("Jumlah Film")
+                st.pyplot(fig2)
+            except:
+                st.warning("Kolom 'Rating' tidak dapat divisualisasikan.")
+        else:
+            st.warning("Kolom 'Rating' tidak ditemukan dalam dataset.")
