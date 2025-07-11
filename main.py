@@ -100,7 +100,6 @@ if st.button("Tampilkan Rekomendasi"):
                     <h5>🎞️ {film['Judul']}</h5>
                     <p><strong>Genre:</strong> {film['Genre']} | <strong>Rating:</strong> {film['Rating']}</p>
                     <p style="color:gray;"><em>{film['Deskripsi'][:250]}...</em></p>
-                    <p><strong>Similarity:</strong> {film['Similarity']}</p>
                 </div>
                 """, unsafe_allow_html=True)
     else:
