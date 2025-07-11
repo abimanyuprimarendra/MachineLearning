@@ -1,118 +1,120 @@
 import streamlit as st
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import re
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.feature_extraction.text import TfidfVectorizer, ENGLISH_STOP_WORDS
+from sklearn.neighbors import NearestNeighbors
+import requests
+import io
 
-# ================================
-# 📦 Load Dataset dari Google Drive
-# ================================
+# ===============================
+# Ambil dataset dari Google Drive via file ID
+# ===============================
 @st.cache_data
-def load_data_from_drive(n_rows=1000):
-    url = "https://drive.google.com/uc?id=1tHMyi7TRCapR6_UbHDd-Wbfr5GL_dE6x"
-    df = pd.read_csv(url).head(n_rows)
-    return df
+def load_data_from_gdrive():
+    file_id = "1s9bogJ0B0rhGgYvTNUjaobEbxL4UfkhZ"
+    url = f"https://drive.google.com/uc?id={file_id}"
+    response = requests.get(url)
+    if response.status_code != 200:
+        st.error("Gagal mengambil data dari Google Drive.")
+        return None
+    return pd.read_csv(io.BytesIO(response.content))
 
-df = load_data_from_drive()
+# ===============================
+# Preprocessing
+# ===============================
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(r'[^a-z\s]', '', text)
+    tokens = text.split()
+    return ' '.join(tokens)
 
-# ================================
-# 🧹 Pra-pemrosesan Data
-# ================================
-required_cols = ['title', 'genres', 'releaseYear', 'imdbAverageRating', 'imdbNumVotes']
-df = df.dropna(subset=required_cols)
+# ===============================
+# Fungsi rekomendasi
+# ===============================
+def get_recommendations_verbose(title, df, tfidf_matrix, knn_model, n=10):
+    try:
+        idx = df[df['movie title'].str.lower() == title.lower()].index[0]
+        distances, indices = knn_model.kneighbors(tfidf_matrix[idx], n_neighbors=n+1)
 
-# Simpan versi asli untuk dropdown
-df['title_original'] = df['title']
+        results = []
+        for i in range(1, len(indices[0])):
+            film_index = indices[0][i]
+            distance = distances[0][i]
+            similarity = 1 - distance
 
-df['title'] = df['title'].str.lower().str.strip()
-df['genres'] = df['genres'].str.lower().str.strip()
-df['releaseYear'] = df['releaseYear'].astype(int)
-df['imdbAverageRating'] = pd.to_numeric(df['imdbAverageRating'], errors='coerce')
-df['imdbNumVotes'] = pd.to_numeric(df['imdbNumVotes'], errors='coerce')
-df = df.dropna().reset_index(drop=True)
+            film_title = df.iloc[film_index]['movie title']
+            rating = df.iloc[film_index].get('Rating', '-')
 
-df['combined_features'] = df['title'] + ' ' + df['genres'] + ' ' + df['releaseYear'].astype(str)
+            raw_genre = df.iloc[film_index]['Generes']
+            try:
+                genre_list = eval(raw_genre) if isinstance(raw_genre, str) else raw_genre
+                genre = ', '.join(genre_list)
+            except:
+                genre = raw_genre
 
-# ================================
-# 🔍 TF-IDF dan Cosine Similarity
-# ================================
-tfidf = TfidfVectorizer(stop_words='english', max_features=5000)
-tfidf_matrix = tfidf.fit_transform(df['combined_features'])
+            overview = df.iloc[film_index].get('Overview', '')
 
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix, dense_output=False)
-indices = pd.Series(df.index, index=df['title']).drop_duplicates()
+            results.append({
+                'Rank': i,
+                'Judul': film_title,
+                'Genre': genre,
+                'Rating': rating,
+                'Deskripsi': overview,
+                'Jarak': round(distance, 4),
+                'Similarity': round(similarity, 4)
+            })
 
-# ================================
-# 🎯 Fungsi Kategori Kemiripan
-# ================================
-def get_similarity_level(score):
-    if score >= 0.80:
-        return "🟢 Sangat Mirip"
-    elif score >= 0.60:
-        return "🟡 Mirip"
-    elif score >= 0.40:
-        return "🟠 Cukup Mirip"
-    else:
-        return "🔴 Sedikit Mirip"
+        return pd.DataFrame(results)
 
-# ================================
-# 🎯 Fungsi Rekomendasi
-# ================================
-def recommend(title, n_recommendations=5):
-    title_lower = title.lower().strip()
-    if title_lower not in indices:
-        return [], f"Film '{title}' tidak ditemukan di dataset."
+    except IndexError:
+        return None
 
-    idx = indices[title_lower]
-    sim_scores = list(enumerate(cosine_sim[idx].toarray().flatten()))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:]
+# ===============================
+# Streamlit App
+# ===============================
+st.title("🎬 Sistem Rekomendasi Film - Content-Based + KNN")
 
-    seen_titles = set()
-    recommendations = []
+df = load_data_from_gdrive()
 
-    for i, score in sim_scores:
-        film_title = df.loc[i, 'title']
-        if film_title not in seen_titles:
-            seen_titles.add(film_title)
-            recommendations.append((i, score))
-        if len(recommendations) == n_recommendations:
-            break
+if df is not None:
+    st.success("✅ Dataset berhasil dimuat!")
 
-    selected_rows = []
-    for i, score in recommendations:
-        row = {
-            'Judul Film': df.loc[i, 'title_original'],
-            'Genre': df.loc[i, 'genres'],
-            'Tahun Rilis': df.loc[i, 'releaseYear'],
-            'Rating': df.loc[i, 'imdbAverageRating'],
-            'Kemiripan (%)': round(score * 100, 1),
-            'Tingkat': get_similarity_level(score)
-        }
-        selected_rows.append(row)
+    # Gabungkan fitur
+    features = ['movie title', 'Generes', 'Director', 'Writer']
+    for feature in features:
+        df[feature] = df[feature].fillna('')
+    df['combined_features'] = df.apply(lambda row: ' '.join(row[feature] for feature in features), axis=1)
+    df['clean_text'] = df['combined_features'].apply(preprocess_text)
 
-    result_df = pd.DataFrame(selected_rows)
-    return result_df, None
+    # TF-IDF dan KNN
+    tfidf = TfidfVectorizer()
+    tfidf_matrix = tfidf.fit_transform(df['clean_text'])
 
-# ================================
-# 🎛️ Streamlit UI
-# ================================
-st.set_page_config(page_title="🎬 Rekomendasi Film", layout="centered")
-st.markdown("""
-    <h1 style='text-align: center; color: #FF4B4B;'>🎬 Sistem Rekomendasi Film</h1>
-    <p style='text-align: center;'>Berbasis <b>Content-Based Filtering</b> menggunakan <b>TF-IDF</b> dan <b>Cosine Similarity</b>.</p>
-    <p style='text-align: center; font-size: 14px;'>Nilai kemiripan dihitung berdasarkan genre, judul, dan tahun rilis. Di atas 40% dianggap relevan.</p>
-""", unsafe_allow_html=True)
+    knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
+    knn_model.fit(tfidf_matrix)
 
-# Dropdown
-st.markdown("## 🎞️ Pilih Film Referensi")
-film_list = sorted(df['title_original'].unique())
-selected_film = st.selectbox("Pilih judul film:", film_list)
+    # Input judul film
+    judul_input = st.text_input("Masukkan judul film:", value="Spider-Man")
 
-# Tombol
-if st.button("🎯 Tampilkan Rekomendasi"):
-    result_df, error = recommend(selected_film)
-    if error:
-        st.warning(error)
-    else:
-        st.success(f"✅ Rekomendasi film untuk: **{selected_film}**")
-        st.markdown("### 🎥 Daftar Rekomendasi Berdasarkan Kemiripan")
-        st.dataframe(result_df, use_container_width=True, hide_index=True)
+    if st.button("🔍 Rekomendasikan"):
+        rekomendasi_df = get_recommendations_verbose(judul_input, df, tfidf_matrix, knn_model)
+
+        if rekomendasi_df is not None:
+            st.subheader("🎯 Rekomendasi Film Serupa:")
+            st.dataframe(rekomendasi_df)
+
+            # Barplot visualisasi
+            fig, ax = plt.subplots(figsize=(10, 4))
+            sns.barplot(x='Judul', y='Jarak', data=rekomendasi_df, palette='magma', ax=ax)
+            ax.set_title(f'Cosine Distance Film Mirip "{judul_input}"', fontsize=14)
+            ax.set_xlabel("Judul Film")
+            ax.set_ylabel("Distance")
+            plt.xticks(rotation=45, ha='right')
+            st.pyplot(fig)
+        else:
+            st.warning(f"⚠️ Film '{judul_input}' tidak ditemukan dalam dataset.")
+else:
+    st.error("❌ Gagal memuat data.")
