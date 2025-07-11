@@ -1,4 +1,6 @@
 streamlit
-scikit-learn
 pandas
+scikit-learn
 matplotlib
+seaborn
+requests
