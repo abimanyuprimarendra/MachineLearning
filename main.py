@@ -64,7 +64,7 @@ def get_recommendations_verbose(title, df, tfidf_matrix, knn_model, n=10):
 # App Streamlit
 # ===============================
 st.set_page_config(page_title="Rekomendasi Film", layout="wide")
-st.title("🎬 Rekomendasi Film Berdasarkan Judul")
+st.title("Sistem Rekomendasi Film")
 
 # Load dataset
 df = load_data_from_gdrive()
